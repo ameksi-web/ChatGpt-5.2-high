@@ -3,92 +3,58 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Rust-like: дерево/камень/инвентарь (Three.js)</title>
+  <title>Rust-like (FPS) — Inventory/Craft/Harvest</title>
   <link rel="icon" href="data:,">
-
   <style>
     html, body { height:100%; margin:0; overflow:hidden; background:#000; }
     canvas { display:block; }
 
-    #hud {
-      position: fixed; inset: 0; pointer-events: none;
-      font: 14px/1.2 system-ui, -apple-system, Segoe UI, Roboto, Arial;
-      color: rgba(255,255,255,.92);
-    }
-    #topLeft {
-      position: fixed; left: 12px; top: 12px;
-      background: rgba(0,0,0,.35);
-      border: 1px solid rgba(255,255,255,.08);
-      border-radius: 12px;
-      padding: 10px 12px;
-      backdrop-filter: blur(6px);
-      pointer-events: auto;
-    }
-    #topLeft button{
-      cursor: pointer;
-      border: 1px solid rgba(255,255,255,.12);
-      background: rgba(255,255,255,.08);
-      color: rgba(255,255,255,.95);
-      border-radius: 10px;
-      padding: 8px 10px;
-      margin-top: 8px;
-    }
-    #topLeft small{ opacity:.9; display:block; margin-top:6px; }
-
-    #prompt {
-      position: fixed; left: 50%; top: 56%;
-      transform: translate(-50%, -50%);
-      padding: 10px 12px;
-      border-radius: 12px;
-      background: rgba(0,0,0,.35);
-      border: 1px solid rgba(255,255,255,.08);
-      backdrop-filter: blur(6px);
-      display: none;
-      white-space: nowrap;
-    }
-
+    /* HUD (минимально, в стиле Rust-подобных выживалок) */
+    #hud { position:fixed; inset:0; pointer-events:none; font: 14px/1.2 system-ui,-apple-system,Segoe UI,Roboto,Arial; color:rgba(255,255,255,.92); }
     #crosshair {
       position: fixed; left: 50%; top: 50%;
-      width: 16px; height: 16px;
-      transform: translate(-50%, -50%);
+      width: 18px; height: 18px; transform: translate(-50%, -50%);
       opacity: .85;
     }
-    #crosshair:before, #crosshair:after {
+    #crosshair:before, #crosshair:after{
       content:""; position:absolute; left:50%; top:50%;
-      background: rgba(255,255,255,.9);
       transform: translate(-50%, -50%);
+      background: rgba(255,255,255,.9);
       border-radius: 2px;
     }
-    #crosshair:before { width: 2px; height: 16px; }
-    #crosshair:after  { width: 16px; height: 2px; }
+    #crosshair:before{ width:2px; height:18px; }
+    #crosshair:after { width:18px; height:2px; }
 
-    #hotbar {
-      position: fixed; left: 50%; bottom: 18px;
+    #prompt {
+      position: fixed; left: 50%; top: calc(50% + 34px);
       transform: translateX(-50%);
-      display: flex; gap: 8px;
-      pointer-events: none;
-    }
-    .slot {
-      width: 58px; height: 58px;
-      border-radius: 14px;
+      padding: 7px 10px;
+      border-radius: 10px;
       background: rgba(0,0,0,.35);
       border: 1px solid rgba(255,255,255,.10);
       backdrop-filter: blur(6px);
-      position: relative;
-      overflow: hidden;
+      display:none;
+      white-space:nowrap;
     }
-    .slot.active { outline: 2px solid rgba(255,255,255,.35); }
-    .slot img {
-      width: 44px; height: 44px;
-      position: absolute; left: 7px; top: 7px;
-      image-rendering: auto;
+
+    #hitX {
+      position: fixed;
+      width: 28px; height: 28px;
+      transform: translate(-50%, -50%);
+      display:none;
+      pointer-events:none;
+      opacity:.95;
+      filter: drop-shadow(0 2px 4px rgba(0,0,0,.55));
     }
-    .slot .count{
-      position:absolute; right:7px; bottom:6px;
-      font-size: 12px;
-      opacity: .95;
-      text-shadow: 0 1px 2px rgba(0,0,0,.65);
+    #hitX:before, #hitX:after{
+      content:""; position:absolute; left:50%; top:50%;
+      width: 26px; height: 3px;
+      background: rgba(255, 70, 70, .95);
+      border-radius: 3px;
+      transform-origin: center;
     }
+    #hitX:before{ transform: translate(-50%,-50%) rotate(45deg); }
+    #hitX:after { transform: translate(-50%,-50%) rotate(-45deg); }
 
     #resources {
       position: fixed; right: 12px; top: 12px;
@@ -97,26 +63,122 @@
       border-radius: 12px;
       padding: 10px 12px;
       backdrop-filter: blur(6px);
-      min-width: 140px;
+      min-width: 150px;
     }
-    .resRow { display:flex; align-items:center; gap:8px; margin: 6px 0; }
-    .resRow img{ width: 22px; height: 22px; border-radius: 6px; }
+    .resRow{ display:flex; align-items:center; gap:10px; margin:6px 0; }
+    .resRow img{ width:22px; height:22px; border-radius: 6px; }
     .resRow span{ opacity:.95; }
 
-    #centerTip {
-      position: fixed; left: 50%; top: 14px;
+    #hotbar{
+      position: fixed; left:50%; bottom:16px;
       transform: translateX(-50%);
-      background: rgba(0,0,0,.30);
-      border: 1px solid rgba(255,255,255,.08);
-      border-radius: 12px;
-      padding: 8px 10px;
+      display:flex; gap:8px;
+      pointer-events:none;
+    }
+    .slot{
+      width: 62px; height: 62px;
+      border-radius: 14px;
+      background: rgba(0,0,0,.35);
+      border: 1px solid rgba(255,255,255,.10);
       backdrop-filter: blur(6px);
-      opacity: .92;
-      pointer-events: none;
+      position:relative;
+      overflow:hidden;
+    }
+    .slot.active{ outline: 2px solid rgba(255,255,255,.35); }
+    .slot img{
+      width: 46px; height: 46px;
+      position:absolute; left:8px; top:8px;
+    }
+    .slot .count{
+      position:absolute; right:7px; bottom:6px;
+      font-size:12px;
+      text-shadow: 0 1px 2px rgba(0,0,0,.65);
+      opacity:.95;
+    }
+
+    /* Inventory overlay (Tab) */
+    #invOverlay{
+      position:fixed; inset:0;
+      background: rgba(0,0,0,.55);
+      backdrop-filter: blur(10px);
+      display:none;
+      pointer-events:auto;
+      color: rgba(255,255,255,.95);
+      font: 14px/1.2 system-ui,-apple-system,Segoe UI,Roboto,Arial;
+    }
+    #invPanel{
+      position:absolute; left:50%; top:50%;
+      transform: translate(-50%, -50%);
+      width: min(1100px, calc(100vw - 30px));
+      height: min(640px, calc(100vh - 30px));
+      display:grid;
+      grid-template-columns: 1fr 340px;
+      gap: 14px;
+    }
+    .panelBox{
+      border-radius: 16px;
+      border: 1px solid rgba(255,255,255,.08);
+      background: rgba(0,0,0,.35);
+      box-shadow: 0 10px 40px rgba(0,0,0,.35);
+      overflow:hidden;
+    }
+    #invGridWrap{ padding: 14px; }
+    #invGrid{
+      display:grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 10px;
+      height: 100%;
+      align-content:start;
+    }
+    .invSlot{
+      aspect-ratio: 1 / 1;
+      border-radius: 14px;
+      border: 1px solid rgba(255,255,255,.10);
+      background: rgba(255,255,255,.04);
+      position:relative;
+      overflow:hidden;
+      cursor: default;
+      user-select:none;
+    }
+    .invSlot img{
+      position:absolute; left: 12%; top: 12%;
+      width: 76%; height: 76%;
+      opacity: .98;
+    }
+    .invSlot .n{
+      position:absolute; right:10px; bottom:8px;
+      font-size: 12px;
+      opacity:.95;
+      text-shadow: 0 1px 2px rgba(0,0,0,.65);
+    }
+    #craftWrap{ padding: 14px; display:flex; flex-direction:column; gap: 12px; }
+    .craftTitle{ font-weight: 650; letter-spacing: .08em; opacity:.9; }
+    .craftCard{
+      border-radius: 14px;
+      border: 1px solid rgba(255,255,255,.10);
+      background: rgba(255,255,255,.04);
+      padding: 12px;
+      display:flex;
+      gap: 12px;
+      align-items:center;
+    }
+    .craftCard img{ width: 54px; height: 54px; border-radius: 14px; background: rgba(0,0,0,.25); }
+    .craftCard .meta{ flex:1; }
+    .craftCard .meta .name{ font-weight: 650; }
+    .craftCard .meta .req{ opacity:.85; font-size: 12px; margin-top: 4px; }
+    .craftCard button{
+      cursor:pointer;
+      border: 1px solid rgba(255,255,255,.12);
+      background: rgba(255,255,255,.08);
+      color: rgba(255,255,255,.95);
+      border-radius: 12px;
+      padding: 10px 12px;
+    }
+    .craftCard button:disabled{
+      opacity: .35; cursor:not-allowed;
     }
   </style>
 
-  <!-- GitHub Pages: чтобы работали import "three" -->
   <script type="importmap">
   {
     "imports": {
@@ -129,640 +191,990 @@
 
 <body>
   <div id="hud">
-    <div id="topLeft">
-      Управление: <b>WASD</b> ходьба • <b>Shift</b> бег • <b>E</b> поднять • <b>ЛКМ</b> рубить<br>
-      Клик по экрану — <b>захват мыши</b> (как в играх FPS). Esc — отпустить.
-      <button id="btnDownload">Скачать текстуры (PNG)</button>
-      <small>Персонаж: Soldier.glb (текстуры модели не трогаю).</small>
-    </div>
-
     <div id="resources">
-      <div class="resRow"><img id="icoStone" alt=""><span>Stone: <b id="stoneCount">0</b></span></div>
-      <div class="resRow"><img id="icoWood" alt=""><span>Wood: <b id="woodCount">0</b></span></div>
+      <div class="resRow"><img id="icoStone" alt=""><span>STONE: <b id="stoneCount">0</b></span></div>
+      <div class="resRow"><img id="icoWood"  alt=""><span>WOOD: <b id="woodCount">0</b></span></div>
     </div>
 
-    <div id="centerTip">1: Камень (инструмент) • Целься в предметы в центре экрана</div>
-    <div id="prompt"></div>
     <div id="crosshair"></div>
+    <div id="hitX"></div>
+    <div id="prompt"></div>
 
     <div id="hotbar">
-      <div class="slot active" id="slot1"><img id="icoRockTool" alt=""><div class="count" id="slot1c">∞</div></div>
-      <div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div>
+      <div class="slot active" id="hb1"><img id="icoRockTool" alt=""><div class="count">1</div></div>
+      <div class="slot" id="hb2"><img id="icoAxe" alt=""><div class="count">2</div></div>
+      <div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div>
     </div>
   </div>
 
-  <script type="module">
-    import * as THREE from "three";
-    import { Sky } from "three/addons/objects/Sky.js";
-    import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+  <div id="invOverlay">
+    <div id="invPanel">
+      <div class="panelBox" id="invGridWrap">
+        <div id="invGrid"></div>
+      </div>
+      <div class="panelBox" id="craftWrap">
+        <div class="craftTitle">CRAFT</div>
 
-    // ----------------- Helpers: texture generator -----------------
-    function makeCanvas(size=256) {
-      const c = document.createElement("canvas");
-      c.width = c.height = size;
-      return c;
-    }
-    function clamp01(x){ return Math.max(0, Math.min(1, x)); }
+        <div class="craftCard">
+          <img id="craftAxeIcon" alt="">
+          <div class="meta">
+            <div class="name">STONE AXE</div>
+            <div class="req" id="craftAxeReq">REQ: 30 WOOD, 15 STONE</div>
+          </div>
+          <button id="craftAxeBtn">CRAFT</button>
+        </div>
 
-    function makeGrassTile(size=512) {
-      const c = makeCanvas(size), ctx = c.getContext("2d");
-      ctx.fillStyle = "#2f6d3a"; ctx.fillRect(0,0,size,size);
+        <div style="opacity:.75; font-size:12px; margin-top:auto;">
+          Tab — close
+        </div>
+      </div>
+    </div>
+  </div>
 
-      const img = ctx.getImageData(0,0,size,size);
-      const d = img.data;
-      for (let i=0;i<d.length;i+=4){
-        const n = Math.random();
-        const g = 95 + Math.floor(n*90);
-        d[i+0] = 25 + Math.floor(Math.random()*25);
-        d[i+1] = g;
-        d[i+2] = 25 + Math.floor(Math.random()*30);
-        d[i+3] = 255;
-      }
-      ctx.putImageData(img,0,0);
+<script type="module">
+  import * as THREE from "three";
+  import { Sky } from "three/addons/objects/Sky.js";
 
-      ctx.globalAlpha = 0.18;
-      ctx.fillStyle = "#1e4e2a";
-      for (let i=0;i<1800;i++){
-        const x = Math.random()*size, y = Math.random()*size;
-        ctx.fillRect(x,y, 20+Math.random()*70, 1+Math.random()*2);
-      }
-      ctx.globalAlpha = 1;
-      return c;
-    }
+  // ---------------- Save / Load ----------------
+  const SAVE_KEY = "rustlike_save_v3";
 
-    function makeBarkTile(size=512) {
-      const c = makeCanvas(size), ctx = c.getContext("2d");
-      ctx.fillStyle = "#6b4a2e"; ctx.fillRect(0,0,size,size);
+  const saveState = {
+    seed: null,
+    player: { x: 0, y: 0, z: 0, yaw: 0, pitch: 0 },
+    inv: { wood: 0, stone: 0, hasAxe: false },
+    equip: { slot: 1 },
+    removed: { trees: [], stones: [] }
+  };
 
-      // vertical bark streaks
-      for (let x=0; x<size; x++){
-        const t = x/size;
-        const col = 80 + Math.floor(60*Math.random());
-        ctx.fillStyle = `rgb(${col},${55+Math.floor(35*Math.random())},${35+Math.floor(30*Math.random())})`;
-        const w = 1 + Math.floor(Math.random()*3);
-        ctx.globalAlpha = 0.12 + Math.random()*0.18;
-        ctx.fillRect(x,0,w,size);
-      }
-      ctx.globalAlpha = 1;
+  function loadSave(){
+    try{
+      const raw = localStorage.getItem(SAVE_KEY);
+      if (!raw) return false;
+      const s = JSON.parse(raw);
+      if (!s || !s.inv || !s.player) return false;
+      Object.assign(saveState, s);
+      saveState.removed ??= { trees: [], stones: [] };
+      saveState.removed.trees ??= [];
+      saveState.removed.stones ??= [];
+      return true;
+    } catch { return false; }
+  }
+  function writeSave(){
+    try{
+      localStorage.setItem(SAVE_KEY, JSON.stringify(saveState));
+    } catch {}
+  }
 
-      // cracks
-      ctx.strokeStyle = "rgba(10,5,3,.35)";
-      ctx.lineWidth = 2;
-      for (let i=0;i<60;i++){
-        const x = Math.random()*size;
-        ctx.beginPath();
-        ctx.moveTo(x,0);
-        let y=0;
-        for (let k=0;k<12;k++){
-          y += size/12;
-          ctx.lineTo(x + (Math.random()-0.5)*18, y);
-        }
-        ctx.stroke();
-      }
-      return c;
-    }
-
-    function makeLeafTile(size=512) {
-      const c = makeCanvas(size), ctx = c.getContext("2d");
-      ctx.fillStyle = "#1f6b3a"; ctx.fillRect(0,0,size,size);
-
-      // noise dots
-      for (let i=0;i<25000;i++){
-        const x = Math.random()*size, y = Math.random()*size;
-        const a = 0.06 + Math.random()*0.12;
-        const g = 120 + Math.floor(Math.random()*90);
-        ctx.fillStyle = `rgba(${30+Math.floor(Math.random()*20)},${g},${35+Math.floor(Math.random()*25)},${a})`;
-        ctx.fillRect(x,y,1,1);
-      }
-      // lighter clusters
-      ctx.globalAlpha = 0.15;
-      ctx.fillStyle = "#7ccf7a";
-      for (let i=0;i<260;i++){
-        ctx.beginPath();
-        ctx.arc(Math.random()*size, Math.random()*size, 10+Math.random()*30, 0, Math.PI*2);
-        ctx.fill();
-      }
-      ctx.globalAlpha = 1;
-      return c;
-    }
-
-    function makeRockTile(size=512) {
-      const c = makeCanvas(size), ctx = c.getContext("2d");
-      ctx.fillStyle = "#6f7378"; ctx.fillRect(0,0,size,size);
-
-      const img = ctx.getImageData(0,0,size,size);
-      const d = img.data;
-      for (let i=0;i<d.length;i+=4){
-        const n = Math.random();
-        const v = 90 + Math.floor(n*120);
-        d[i+0] = v - Math.floor(Math.random()*10);
-        d[i+1] = v - Math.floor(Math.random()*8);
-        d[i+2] = v;
-        d[i+3] = 255;
-      }
-      ctx.putImageData(img,0,0);
-
-      // cracks
-      ctx.strokeStyle = "rgba(0,0,0,.20)";
-      ctx.lineWidth = 1;
-      for (let i=0;i<220;i++){
-        ctx.beginPath();
-        const x = Math.random()*size, y = Math.random()*size;
-        ctx.moveTo(x,y);
-        ctx.lineTo(x+(Math.random()-0.5)*60, y+(Math.random()-0.5)*60);
-        ctx.stroke();
-      }
-
-      // highlights
-      ctx.globalAlpha = 0.10;
-      ctx.fillStyle = "#cfd4d8";
-      for (let i=0;i<180;i++){
-        ctx.beginPath();
-        ctx.arc(Math.random()*size, Math.random()*size, 8+Math.random()*26, 0, Math.PI*2);
-        ctx.fill();
-      }
-      ctx.globalAlpha = 1;
-      return c;
-    }
-
-    function makeIconRock(size=128){
-      const c = makeCanvas(size), ctx = c.getContext("2d");
-      ctx.fillStyle="rgba(0,0,0,0)"; ctx.clearRect(0,0,size,size);
-      ctx.fillStyle="#2b2f34";
-      ctx.beginPath();
-      ctx.moveTo(25,75); ctx.lineTo(45,30); ctx.lineTo(90,35); ctx.lineTo(105,70); ctx.lineTo(78,103); ctx.lineTo(35,98);
-      ctx.closePath(); ctx.fill();
-      ctx.fillStyle="rgba(255,255,255,.20)";
-      ctx.beginPath(); ctx.moveTo(45,35); ctx.lineTo(75,38); ctx.lineTo(62,62); ctx.closePath(); ctx.fill();
-      return c;
-    }
-    function makeIconStone(size=128){
-      const c = makeCanvas(size), ctx = c.getContext("2d");
-      ctx.clearRect(0,0,size,size);
-      ctx.fillStyle="#6f7378";
-      ctx.beginPath();
-      ctx.arc(64,70,38,0,Math.PI*2);
-      ctx.fill();
-      ctx.fillStyle="rgba(255,255,255,.22)";
-      ctx.beginPath();
-      ctx.arc(52,58,16,0,Math.PI*2);
-      ctx.fill();
-      return c;
-    }
-    function makeIconWood(size=128){
-      const c = makeCanvas(size), ctx = c.getContext("2d");
-      ctx.clearRect(0,0,size,size);
-      ctx.fillStyle="#7a4f2a";
-      ctx.beginPath();
-      ctx.roundRect(26,34,76,60,18);
-      ctx.fill();
-      ctx.fillStyle="rgba(0,0,0,.18)";
-      for (let i=0;i<6;i++){
-        ctx.fillRect(34+i*10,38,4,52);
-      }
-      ctx.fillStyle="rgba(255,255,255,.18)";
-      ctx.fillRect(30,40,18,8);
-      return c;
-    }
-
-    // ----------------- Three.js базовая сцена -----------------
-    const renderer = new THREE.WebGLRenderer({ antialias:true });
-    renderer.setSize(innerWidth, innerHeight);
-    renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
-    renderer.outputColorSpace = THREE.SRGBColorSpace;
-    renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.05;
-    renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-    document.body.appendChild(renderer.domElement);
-
-    const scene = new THREE.Scene();
-    scene.fog = new THREE.FogExp2(0x0b1520, 0.00065);
-
-    const camera = new THREE.PerspectiveCamera(70, innerWidth/innerHeight, 0.1, 12000);
-
-    // Sky
-    const sky = new Sky();
-    sky.scale.setScalar(10000);
-    scene.add(sky);
-    const skyU = sky.material.uniforms;
-    skyU.turbidity.value = 8.0;
-    skyU.rayleigh.value = 2.0;
-    skyU.mieCoefficient.value = 0.006;
-    skyU.mieDirectionalG.value = 0.82;
-
-    const pmrem = new THREE.PMREMGenerator(renderer);
-    let envRT = null;
-    const sun = new THREE.Vector3();
-
-    const sunLight = new THREE.DirectionalLight(0xffffff, 4.0);
-    sunLight.castShadow = true;
-    sunLight.shadow.mapSize.set(2048,2048);
-    sunLight.shadow.bias = -0.00025;
-    const s = 280;
-    Object.assign(sunLight.shadow.camera, { left:-s, right:s, top:s, bottom:-s, near:1, far:4000 });
-    scene.add(sunLight);
-    scene.add(sunLight.target);
-    scene.add(new THREE.HemisphereLight(0xbfe9ff, 0x071018, 0.35));
-
-    function setSun(elev=12, azim=155){
-      const phi = THREE.MathUtils.degToRad(90 - elev);
-      const theta = THREE.MathUtils.degToRad(azim);
-      sun.setFromSphericalCoords(1, phi, theta);
-      skyU.sunPosition.value.copy(sun);
-      if (envRT) envRT.dispose();
-      envRT = pmrem.fromScene(sky);
-      scene.environment = envRT.texture;
-
-      sunLight.position.copy(sun).multiplyScalar(1600);
-      sunLight.target.position.set(0,0,0);
-      sunLight.target.updateMatrixWorld();
-    }
-    setSun(12, 155);
-
-    // ----------------- Текстуры (все тут) -----------------
-    const tex = {};
-    tex.canvasGrass = makeGrassTile(512);
-    tex.canvasBark  = makeBarkTile(512);
-    tex.canvasLeaf  = makeLeafTile(512);
-    tex.canvasRock  = makeRockTile(512);
-
-    tex.canvasIconRockTool = makeIconRock(128);
-    tex.canvasIconStone = makeIconStone(128);
-    tex.canvasIconWood  = makeIconWood(128);
-
-    function canvasToTexture(c, repeatX=1, repeatY=1) {
-      const t = new THREE.CanvasTexture(c);
-      t.colorSpace = THREE.SRGBColorSpace;
-      t.wrapS = t.wrapT = THREE.RepeatWrapping;
-      t.repeat.set(repeatX, repeatY);
-      t.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
-      t.needsUpdate = true;
-      return t;
-    }
-
-    const grassMap = canvasToTexture(tex.canvasGrass, 20, 20);
-    const barkMap  = canvasToTexture(tex.canvasBark,  1,  4);
-    const leafMap  = canvasToTexture(tex.canvasLeaf,  2,  2);
-    const rockMap  = canvasToTexture(tex.canvasRock,  2,  2);
-
-    // UI icons
-    const icoRockTool = document.getElementById("icoRockTool");
-    const icoStone = document.getElementById("icoStone");
-    const icoWood  = document.getElementById("icoWood");
-    icoRockTool.src = tex.canvasIconRockTool.toDataURL("image/png");
-    icoStone.src    = tex.canvasIconStone.toDataURL("image/png");
-    icoWood.src     = tex.canvasIconWood.toDataURL("image/png");
-
-    // ----------------- Terrain (равнина + гора) -----------------
-    function hash2i(ix, iz) {
-      let x = ix * 374761393 + iz * 668265263;
-      x = (x ^ (x >> 13)) * 1274126177;
-      x = (x ^ (x >> 16)) >>> 0;
-      return x / 4294967295;
-    }
-    function fade(t){ return t*t*t*(t*(t*6-15)+10); }
-    function lerp(a,b,t){ return a+(b-a)*t; }
-    function noise2D(x,z){
-      const x0 = Math.floor(x), z0 = Math.floor(z);
-      const x1 = x0+1, z1 = z0+1;
-      const sx = fade(x-x0), sz = fade(z-z0);
-      const n00 = hash2i(x0,z0), n10 = hash2i(x1,z0), n01 = hash2i(x0,z1), n11 = hash2i(x1,z1);
-      const ix0 = lerp(n00,n10,sx), ix1 = lerp(n01,n11,sx);
-      return lerp(ix0,ix1,sz);
-    }
-    function fbm(x,z,oct=5){
-      let v=0, amp=1, freq=1, sum=0;
-      for(let i=0;i<oct;i++){
-        v += (noise2D(x*freq, z*freq)*2-1)*amp;
-        sum += amp;
-        amp *= 0.5;
-        freq *= 2.0;
-      }
-      return v/sum;
-    }
-    function heightAt(x,z){
-      const plains = fbm(x*0.008, z*0.008, 5) * 6.0;
-      const mx = 0, mz = -120;
-      const dx = x-mx, dz=z-mz;
-      const r2 = dx*dx+dz*dz;
-      const sigma = 160;
-      const mountain = Math.exp(-r2/(2*sigma*sigma)) * 105.0;
-      const rocky = fbm(x*0.03, z*0.03, 4) * 7.0 * (mountain/105.0);
-      return plains + mountain + rocky;
-    }
-
-    const groundSize = 2200;
-    const seg = 220;
-    const groundGeo = new THREE.PlaneGeometry(groundSize, groundSize, seg, seg);
-
-    {
-      const pos = groundGeo.attributes.position;
-      for (let i=0;i<pos.count;i++){
-        const x = pos.getX(i);
-        const z = pos.getY(i);         // пока плоскость XY, после поворота станет XZ
-        pos.setZ(i, heightAt(x,z));
-      }
-      groundGeo.computeVertexNormals();
-    }
-
-    const groundMat = new THREE.MeshStandardMaterial({
-      map: grassMap,
-      roughness: 1.0,
-      metalness: 0.0
-    });
-
-    const ground = new THREE.Mesh(groundGeo, groundMat);
-    ground.rotation.x = -Math.PI/2;
-    ground.receiveShadow = true;
-    scene.add(ground);
-
-    // ----------------- World: деревья и камни -----------------
-    const interactables = []; // сюда кладём объекты для raycast
-
-    const trunkMat = new THREE.MeshStandardMaterial({
-      map: barkMap,
-      roughness: 1.0,
-      metalness: 0.0,
-      color: 0xffffff
-    });
-    const leafMat = new THREE.MeshStandardMaterial({
-      map: leafMap,
-      roughness: 1.0,
-      metalness: 0.0,
-      color: 0xffffff
-    });
-
-    const rockWorldMat = new THREE.MeshStandardMaterial({
-      map: rockMap,
-      roughness: 1.0,
-      metalness: 0.0,
-      color: 0xffffff
-    });
-
-    function addTree(x,z){
-      const y = heightAt(x,z);
-
-      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(2.2, 2.8, 22, 10), trunkMat);
-      trunk.castShadow = true; trunk.receiveShadow = true;
-      trunk.position.set(x, y + 11, z);
-
-      const crown = new THREE.Mesh(new THREE.SphereGeometry(10, 16, 12), leafMat);
-      crown.castShadow = true; crown.receiveShadow = true;
-      crown.position.set(x, y + 26, z);
-
-      const group = new THREE.Group();
-      group.add(trunk, crown);
-      group.userData.type = "tree";
-      group.userData.hp = 6;
-      group.userData.maxHp = 6;
-
-      // важно: для raycast цепляем именно ствол
-      trunk.userData.type = "tree";
-      trunk.userData.parentTree = group;
-
-      scene.add(group);
-      interactables.push(trunk);
-      return group;
-    }
-
-    function addStonePickup(x,z){
-      const y = heightAt(x,z);
-      const m = new THREE.Mesh(new THREE.DodecahedronGeometry(3.2, 0), rockWorldMat);
-      m.castShadow = true; m.receiveShadow = true;
-      m.position.set(x, y + 3.2, z);
-      m.rotation.y = Math.random()*Math.PI*2;
-      m.userData.type = "stonePickup";
-      scene.add(m);
-      interactables.push(m);
-      return m;
-    }
-
-    // генерация мира
-    for (let i=0;i<55;i++){
-      const x = (Math.random()-0.5) * 1200;
-      const z = (Math.random()-0.5) * 1200;
-      // не ставим деревья на вершине горы слишком плотно
-      if (heightAt(x,z) > 85) continue;
-      addTree(x,z);
-    }
-    for (let i=0;i<40;i++){
-      const x = (Math.random()-0.5) * 1000;
-      const z = (Math.random()-0.5) * 1000;
-      if (heightAt(x,z) > 95) continue;
-      addStonePickup(x,z);
-    }
-
-    // ----------------- Character (человек) — текстуры не меняем -----------------
-    // В этом демо персонаж просто стоит рядом (как "главный"), а управление — от первого лица.
-    const character = new THREE.Group();
-    scene.add(character);
-
-    const gltfLoader = new GLTFLoader();
-    let mixer = null;
-
-    gltfLoader.load(
-      "https://threejs.org/examples/models/gltf/Soldier.glb",
-      (gltf)=>{
-        const model = gltf.scene;
-        model.traverse(o=>{
-          if (o.isMesh){ o.castShadow = true; o.receiveShadow = true; }
-        });
-        model.scale.setScalar(1.35);
-        character.add(model);
-
-        // Анимация idle
-        mixer = new THREE.AnimationMixer(model);
-        const clip = gltf.animations.find(a=>/idle/i.test(a.name)) || gltf.animations[0];
-        if (clip) mixer.clipAction(clip).play();
-
-        character.position.set(10, heightAt(10,0), 0);
-      },
-      undefined,
-      (e)=>console.error("Soldier.glb не загрузился:", e)
-    );
-
-    // ----------------- FPS controls (pointer lock) -----------------
-    const player = {
-      pos: new THREE.Vector3(0, 0, 160),
-      yaw: 0,
-      pitch: 0,
-      eye: 16,
-      speedWalk: 65,
-      speedRun: 105
+  // ---------------- Deterministic RNG ----------------
+  function makeRNG(seed){
+    let s = seed >>> 0;
+    return () => {
+      // xorshift32
+      s ^= s << 13; s >>>= 0;
+      s ^= s >> 17; s >>>= 0;
+      s ^= s << 5;  s >>>= 0;
+      return (s >>> 0) / 4294967296;
     };
-    player.pos.y = heightAt(player.pos.x, player.pos.z) + player.eye;
-    camera.position.copy(player.pos);
+  }
 
-    const keys = new Set();
-    addEventListener("keydown", (e)=> keys.add(e.code));
-    addEventListener("keyup", (e)=> keys.delete(e.code));
+  // ---------------- Texture generation (albedo + normal) ----------------
+  function makeCanvas(size=512){
+    const c = document.createElement("canvas");
+    c.width = c.height = size;
+    return c;
+  }
+  function hexToRgb(hex){
+    const h = hex.replace("#","");
+    const n = parseInt(h,16);
+    return { r:(n>>16)&255, g:(n>>8)&255, b:n&255 };
+  }
+  function clamp255(v){ return Math.max(0, Math.min(255, v|0)); }
 
-    let pointerLocked = false;
-    function lockPointer(){
-      renderer.domElement.requestPointerLock();
-    }
-    document.addEventListener("pointerlockchange", ()=>{
-      pointerLocked = (document.pointerLockElement === renderer.domElement);
-    });
-    renderer.domElement.addEventListener("click", ()=> lockPointer());
+  function makeNoiseHeight(size, rng, oct=5){
+    // value noise-ish fbm on grid (cheap)
+    const h = new Float32Array(size*size);
+    const base = new Float32Array(size*size);
+    for (let i=0;i<base.length;i++) base[i] = rng();
 
-    addEventListener("mousemove", (e)=>{
-      if (!pointerLocked) return;
-      const sens = 0.0022;
-      player.yaw   -= e.movementX * sens;
-      player.pitch -= e.movementY * sens;
-      player.pitch = THREE.MathUtils.clamp(player.pitch, -1.25, 1.25);
-    });
+    function at(x,y){ return base[((y& (size-1))*size + (x&(size-1)))]; }
+    function fade(t){ return t*t*(3-2*t); }
+    function lerp(a,b,t){ return a+(b-a)*t; }
 
-    function forwardVector(){
-      const f = new THREE.Vector3(0,0,-1);
-      const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(player.pitch, player.yaw, 0, "YXZ"));
-      return f.applyQuaternion(q).normalize();
-    }
-    function rightVector(){
-      const r = new THREE.Vector3(1,0,0);
-      const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, player.yaw, 0, "YXZ"));
-      return r.applyQuaternion(q).normalize();
+    function noise(x,y){
+      const x0 = Math.floor(x), y0 = Math.floor(y);
+      const xf = x - x0, yf = y - y0;
+      const v00 = at(x0,y0), v10=at(x0+1,y0), v01=at(x0,y0+1), v11=at(x0+1,y0+1);
+      const u = fade(xf), v = fade(yf);
+      return lerp(lerp(v00,v10,u), lerp(v01,v11,u), v);
     }
 
-    // ----------------- Inventory / UI -----------------
-    const inv = { stone: 0, wood: 0 };
-    const stoneCountEl = document.getElementById("stoneCount");
-    const woodCountEl = document.getElementById("woodCount");
-    const promptEl = document.getElementById("prompt");
-
-    function updateUI(){
-      stoneCountEl.textContent = inv.stone;
-      woodCountEl.textContent = inv.wood;
-    }
-    updateUI();
-
-    // ----------------- Interaction: raycast -----------------
-    const raycaster = new THREE.Raycaster();
-    const center = new THREE.Vector2(0,0);
-    let target = null; // { obj, type, dist, treeGroup? }
-    const interactDist = 34;
-
-    function updateTarget(){
-      raycaster.setFromCamera(center, camera);
-      const hits = raycaster.intersectObjects(interactables, false);
-      target = null;
-
-      if (hits.length){
-        const h = hits[0];
-        if (h.distance <= interactDist){
-          const obj = h.object;
-          const type = obj.userData.type;
-          if (type === "stonePickup"){
-            target = { obj, type, dist: h.distance };
-          } else if (type === "tree"){
-            target = { obj, type, dist: h.distance, tree: obj.userData.parentTree };
-          }
+    for (let y=0;y<size;y++){
+      for (let x=0;x<size;x++){
+        let f=1, a=1, sumA=0, v=0;
+        for (let o=0;o<oct;o++){
+          v += (noise(x*f/32, y*f/32)*2-1)*a;
+          sumA += a;
+          a *= 0.5;
+          f *= 2.0;
         }
+        h[y*size+x] = v / sumA; // ~[-1..1]
       }
+    }
+    return h;
+  }
 
-      if (!target){
-        promptEl.style.display = "none";
-        return;
-      }
+  function makeAlbedoAndNormal({ size=512, base1="#2f6d3a", base2="#1f4e2a", contrast=0.8, normalStrength=2.2, rng }){
+    const cA = makeCanvas(size);
+    const ctxA = cA.getContext("2d");
+    const imgA = ctxA.createImageData(size,size);
 
-      if (target.type === "stonePickup"){
-        promptEl.textContent = "E — поднять камень (+1 Stone)";
-        promptEl.style.display = "block";
-      }
-      if (target.type === "tree"){
-        const hp = target.tree.userData.hp;
-        promptEl.textContent = `ЛКМ — рубить дерево (HP: ${hp})`;
-        promptEl.style.display = "block";
+    const cN = makeCanvas(size);
+    const ctxN = cN.getContext("2d");
+    const imgN = ctxN.createImageData(size,size);
+
+    const b1 = hexToRgb(base1), b2 = hexToRgb(base2);
+    const H = makeNoiseHeight(size, rng, 6);
+
+    function getH(x,y){ return H[(y*size + x)]; }
+
+    for (let y=0;y<size;y++){
+      for (let x=0;x<size;x++){
+        const i = (y*size + x);
+        const h = getH(x,y);
+
+        // albedo: mix + speckle
+        const t = Math.max(0, Math.min(1, 0.5 + h*0.5*contrast));
+        const r = b1.r*(t) + b2.r*(1-t);
+        const g = b1.g*(t) + b2.g*(1-t);
+        const b = b1.b*(t) + b2.b*(1-t);
+
+        const speck = (rng()-0.5)*28;
+        imgA.data[i*4+0] = clamp255(r + speck);
+        imgA.data[i*4+1] = clamp255(g + speck);
+        imgA.data[i*4+2] = clamp255(b + speck);
+        imgA.data[i*4+3] = 255;
+
+        // normal from height (central diff)
+        const xl = (x-1+size)%size, xr = (x+1)%size;
+        const yu = (y-1+size)%size, yd = (y+1)%size;
+        const dhx = (getH(xl,y) - getH(xr,y)) * normalStrength;
+        const dhy = (getH(x,yu) - getH(x,yd)) * normalStrength;
+
+        let nx = dhx, ny = dhy, nz = 1.0;
+        const invLen = 1 / Math.sqrt(nx*nx + ny*ny + nz*nz);
+        nx *= invLen; ny *= invLen; nz *= invLen;
+
+        imgN.data[i*4+0] = clamp255((nx*0.5 + 0.5) * 255);
+        imgN.data[i*4+1] = clamp255((ny*0.5 + 0.5) * 255);
+        imgN.data[i*4+2] = clamp255((nz*0.5 + 0.5) * 255);
+        imgN.data[i*4+3] = 255;
       }
     }
 
-    // pickup on E
-    addEventListener("keydown", (e)=>{
-      if (e.code !== "KeyE") return;
-      if (!target) return;
+    ctxA.putImageData(imgA,0,0);
+    ctxN.putImageData(imgN,0,0);
+    return { albedoCanvas: cA, normalCanvas: cN };
+  }
 
-      if (target.type === "stonePickup"){
-        scene.remove(target.obj);
-        const idx = interactables.indexOf(target.obj);
-        if (idx>=0) interactables.splice(idx,1);
-        inv.stone += 1;
-        updateUI();
-        target = null;
-        promptEl.style.display = "none";
+  function makeBarkPBR(size, rng){
+    const cA = makeCanvas(size), ctxA = cA.getContext("2d");
+    ctxA.fillStyle = "#6b4a2e"; ctxA.fillRect(0,0,size,size);
+
+    // vertical fibers
+    for (let x=0;x<size;x++){
+      const a = 0.10 + rng()*0.20;
+      const col = 60 + (rng()*60)|0;
+      ctxA.fillStyle = `rgba(${col},${45+(rng()*40|0)},${28+(rng()*30|0)},${a})`;
+      ctxA.fillRect(x,0,1,size);
+    }
+    // cracks
+    ctxA.strokeStyle = "rgba(10,5,3,.35)";
+    ctxA.lineWidth = 2;
+    for (let i=0;i<70;i++){
+      let x = rng()*size;
+      ctxA.beginPath();
+      ctxA.moveTo(x,0);
+      let y=0;
+      for (let k=0;k<14;k++){
+        y += size/14;
+        x += (rng()-0.5)*18;
+        ctxA.lineTo(x,y);
       }
-    });
+      ctxA.stroke();
+    }
 
-    // chop on LMB
-    let hitCooldown = 0;
-    addEventListener("mousedown", (e)=>{
-      if (e.button !== 0) return; // LMB
-      if (!target || target.type !== "tree") return;
-      if (hitCooldown > 0) return;
+    // height from albedo (cheap)
+    const img = ctxA.getImageData(0,0,size,size);
+    const H = new Float32Array(size*size);
+    for (let i=0;i<H.length;i++){
+      const r = img.data[i*4+0], g = img.data[i*4+1], b = img.data[i*4+2];
+      H[i] = (r+g+b)/765; // 0..1
+    }
 
-      // удар камнем
-      const tree = target.tree;
-      tree.userData.hp -= 1;
-      hitCooldown = 0.18;
+    const cN = makeCanvas(size), ctxN = cN.getContext("2d");
+    const imgN = ctxN.createImageData(size,size);
+    function getH(x,y){ return H[(y*size + x)]; }
 
-      // маленькая вспышка/щепки (очень простая)
-      const p = new THREE.Mesh(
-        new THREE.SphereGeometry(0.35, 10, 8),
-        new THREE.MeshStandardMaterial({ color: 0xffe2a8, emissive: 0x442200, emissiveIntensity: 0.6 })
-      );
-      p.position.copy(target.obj.position).add(new THREE.Vector3((Math.random()-0.5)*1.5, 2+Math.random()*1.2, (Math.random()-0.5)*1.5));
-      p.castShadow = false;
-      scene.add(p);
-      setTimeout(()=> scene.remove(p), 120);
+    const strength = 3.2;
+    for (let y=0;y<size;y++){
+      for (let x=0;x<size;x++){
+        const i = y*size + x;
+        const xl = (x-1+size)%size, xr = (x+1)%size;
+        const yu = (y-1+size)%size, yd = (y+1)%size;
+        const dhx = (getH(xl,y) - getH(xr,y)) * strength;
+        const dhy = (getH(x,yu) - getH(x,yd)) * strength;
 
-      if (tree.userData.hp <= 0){
-        // удалить дерево
-        tree.traverse(o=>{
-          if (o.isMesh){
-            const idx = interactables.indexOf(o);
-            if (idx>=0) interactables.splice(idx,1);
-          }
-        });
-        scene.remove(tree);
+        let nx = dhx, ny = dhy, nz = 1.0;
+        const invLen = 1/Math.sqrt(nx*nx+ny*ny+nz*nz);
+        nx*=invLen; ny*=invLen; nz*=invLen;
 
-        // лут
-        inv.wood += 20;
-        updateUI();
-        target = null;
-        promptEl.style.display = "none";
+        imgN.data[i*4+0] = clamp255((nx*0.5+0.5)*255);
+        imgN.data[i*4+1] = clamp255((ny*0.5+0.5)*255);
+        imgN.data[i*4+2] = clamp255((nz*0.5+0.5)*255);
+        imgN.data[i*4+3] = 255;
       }
-    });
+    }
+    ctxN.putImageData(imgN,0,0);
+    return { albedoCanvas: cA, normalCanvas: cN };
+  }
 
-    // ----------------- Download textures button -----------------
-    function downloadCanvasPNG(canvas, name){
+  function makeIcon(fn, size=128){
+    const c = makeCanvas(size), ctx = c.getContext("2d");
+    ctx.clearRect(0,0,size,size);
+    fn(ctx,size);
+    return c;
+  }
+
+  // icons
+  const iconRockTool = makeIcon((ctx,s)=>{
+    ctx.fillStyle="#2b2f34";
+    ctx.beginPath();
+    ctx.moveTo(25,78); ctx.lineTo(46,30); ctx.lineTo(92,36); ctx.lineTo(106,70); ctx.lineTo(78,104); ctx.lineTo(35,98);
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle="rgba(255,255,255,.18)";
+    ctx.beginPath(); ctx.moveTo(46,35); ctx.lineTo(78,39); ctx.lineTo(62,62); ctx.closePath(); ctx.fill();
+  });
+  const iconStone = makeIcon((ctx,s)=>{
+    ctx.fillStyle="#6f7378";
+    ctx.beginPath(); ctx.arc(s/2, s*0.58, s*0.30, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle="rgba(255,255,255,.22)";
+    ctx.beginPath(); ctx.arc(s*0.42, s*0.46, s*0.12, 0, Math.PI*2); ctx.fill();
+  });
+  const iconWood = makeIcon((ctx,s)=>{
+    ctx.fillStyle="#7a4f2a";
+    ctx.roundRect(s*0.20, s*0.28, s*0.60, s*0.46, 18);
+    ctx.fill();
+    ctx.fillStyle="rgba(0,0,0,.18)";
+    for (let i=0;i<6;i++) ctx.fillRect(s*0.27+i*s*0.09, s*0.31, s*0.03, s*0.40);
+    ctx.fillStyle="rgba(255,255,255,.16)";
+    ctx.fillRect(s*0.25, s*0.34, s*0.18, s*0.07);
+  });
+  const iconAxe = makeIcon((ctx,s)=>{
+    // handle
+    ctx.fillStyle="#6b4a2e";
+    ctx.roundRect(s*0.46, s*0.18, s*0.10, s*0.62, 10);
+    ctx.fill();
+    // head
+    ctx.fillStyle="#aeb6bf";
+    ctx.beginPath();
+    ctx.moveTo(s*0.36, s*0.30);
+    ctx.lineTo(s*0.70, s*0.30);
+    ctx.lineTo(s*0.76, s*0.42);
+    ctx.lineTo(s*0.70, s*0.52);
+    ctx.lineTo(s*0.36, s*0.52);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle="rgba(0,0,0,.18)";
+    ctx.fillRect(s*0.46, s*0.30, s*0.10, s*0.22);
+  });
+
+  // expose “all textures” (без кнопок в GUI): открой DevTools console -> downloadTextures()
+  window.__rustTextures = { iconRockTool, iconStone, iconWood, iconAxe };
+  window.downloadTextures = () => {
+    const pack = window.__rustTextures;
+    for (const [k, c] of Object.entries(pack)){
+      if (!c || !c.toDataURL) continue;
       const a = document.createElement("a");
-      a.href = canvas.toDataURL("image/png");
-      a.download = name;
+      a.href = c.toDataURL("image/png");
+      a.download = `${k}.png`;
       document.body.appendChild(a);
       a.click();
       a.remove();
     }
-    document.getElementById("btnDownload").addEventListener("click", ()=>{
-      downloadCanvasPNG(tex.canvasGrass, "grass_tile.png");
-      downloadCanvasPNG(tex.canvasBark,  "bark_tile.png");
-      downloadCanvasPNG(tex.canvasLeaf,  "leaf_tile.png");
-      downloadCanvasPNG(tex.canvasRock,  "rock_tile.png");
-      downloadCanvasPNG(tex.canvasIconRockTool, "icon_rock_tool.png");
-      downloadCanvasPNG(tex.canvasIconStone, "icon_stone.png");
-      downloadCanvasPNG(tex.canvasIconWood,  "icon_wood.png");
-    });
+  };
 
-    // ----------------- Loop -----------------
-    const clock = new THREE.Clock();
-    function animate(){
-      requestAnimationFrame(animate);
-      const dt = Math.min(clock.getDelta(), 0.033);
+  // ---------------- Three.js ----------------
+  const renderer = new THREE.WebGLRenderer({ antialias:true });
+  renderer.setSize(innerWidth, innerHeight);
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.05;
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  document.body.appendChild(renderer.domElement);
 
-      if (mixer) mixer.update(dt);
-      hitCooldown = Math.max(0, hitCooldown - dt);
+  const scene = new THREE.Scene();
+  scene.fog = new THREE.FogExp2(0x0b1520, 0.00065);
 
-      // movement
+  const camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, 0.08, 12000);
+
+  // Sky + env
+  const sky = new Sky();
+  sky.scale.setScalar(10000);
+  scene.add(sky);
+
+  const skyU = sky.material.uniforms;
+  skyU.turbidity.value = 8.0;
+  skyU.rayleigh.value = 2.0;
+  skyU.mieCoefficient.value = 0.006;
+  skyU.mieDirectionalG.value = 0.82;
+
+  const sun = new THREE.Vector3();
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  let envRT = null;
+
+  const sunLight = new THREE.DirectionalLight(0xffffff, 4.0);
+  sunLight.castShadow = true;
+  sunLight.shadow.mapSize.set(2048,2048);
+  sunLight.shadow.bias = -0.00025;
+  const sh = 320;
+  Object.assign(sunLight.shadow.camera, { left:-sh, right:sh, top:sh, bottom:-sh, near:1, far:4500 });
+  scene.add(sunLight);
+  scene.add(sunLight.target);
+  scene.add(new THREE.HemisphereLight(0xbfe9ff, 0x071018, 0.35));
+
+  function setSun(elev=12, azim=155){
+    const phi = THREE.MathUtils.degToRad(90 - elev);
+    const theta = THREE.MathUtils.degToRad(azim);
+    sun.setFromSphericalCoords(1, phi, theta);
+    skyU.sunPosition.value.copy(sun);
+
+    if (envRT) envRT.dispose();
+    envRT = pmrem.fromScene(sky);
+    scene.environment = envRT.texture;
+
+    sunLight.position.copy(sun).multiplyScalar(1700);
+    sunLight.target.position.set(0,0,0);
+    sunLight.target.updateMatrixWorld();
+  }
+  setSun(12, 155);
+
+  // ---------------- Textures (world) ----------------
+  // init seed
+  const hasSave = loadSave();
+  if (!hasSave) saveState.seed = (Math.random()*1e9)|0;
+  const rngTex = makeRNG((saveState.seed ^ 0xA53A9D) >>> 0);
+
+  const grassPBR = makeAlbedoAndNormal({ size:512, base1:"#2f6d3a", base2:"#1f4e2a", contrast:0.9, normalStrength:2.4, rng: rngTex });
+  const rockPBR  = makeAlbedoAndNormal({ size:512, base1:"#8a8f95", base2:"#555b61", contrast:1.0, normalStrength:3.0, rng: rngTex });
+  const barkPBR  = makeBarkPBR(512, rngTex);
+  const leafPBR  = makeAlbedoAndNormal({ size:512, base1:"#2b7a47", base2:"#184b2d", contrast:0.9, normalStrength:1.2, rng: rngTex });
+
+  window.__rustTextures.grass_albedo = grassPBR.albedoCanvas;
+  window.__rustTextures.grass_normal = grassPBR.normalCanvas;
+  window.__rustTextures.rock_albedo  = rockPBR.albedoCanvas;
+  window.__rustTextures.rock_normal  = rockPBR.normalCanvas;
+  window.__rustTextures.bark_albedo  = barkPBR.albedoCanvas;
+  window.__rustTextures.bark_normal  = barkPBR.normalCanvas;
+  window.__rustTextures.leaf_albedo  = leafPBR.albedoCanvas;
+  window.__rustTextures.leaf_normal  = leafPBR.normalCanvas;
+
+  function canvasTex(canvas, repeatX=1, repeatY=1){
+    const t = new THREE.CanvasTexture(canvas);
+    t.colorSpace = THREE.SRGBColorSpace;
+    t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    t.repeat.set(repeatX, repeatY);
+    t.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+    t.needsUpdate = true;
+    return t;
+  }
+
+  const texGrass = canvasTex(grassPBR.albedoCanvas, 20, 20);
+  const nrmGrass = canvasTex(grassPBR.normalCanvas, 20, 20);
+  const texRock  = canvasTex(rockPBR.albedoCanvas, 2, 2);
+  const nrmRock  = canvasTex(rockPBR.normalCanvas, 2, 2);
+  const texBark  = canvasTex(barkPBR.albedoCanvas, 1, 4);
+  const nrmBark  = canvasTex(barkPBR.normalCanvas, 1, 4);
+  const texLeaf  = canvasTex(leafPBR.albedoCanvas, 2, 2);
+  const nrmLeaf  = canvasTex(leafPBR.normalCanvas, 2, 2);
+
+  // UI icons
+  const icoRockToolEl = document.getElementById("icoRockTool");
+  const icoStoneEl = document.getElementById("icoStone");
+  const icoWoodEl = document.getElementById("icoWood");
+  const icoAxeEl = document.getElementById("icoAxe");
+  const craftAxeIcon = document.getElementById("craftAxeIcon");
+
+  icoRockToolEl.src = iconRockTool.toDataURL("image/png");
+  icoStoneEl.src = iconStone.toDataURL("image/png");
+  icoWoodEl.src  = iconWood.toDataURL("image/png");
+  icoAxeEl.src   = iconAxe.toDataURL("image/png");
+  craftAxeIcon.src = iconAxe.toDataURL("image/png");
+
+  // ---------------- Terrain ----------------
+  function hash2i(ix, iz) {
+    let x = ix * 374761393 + iz * 668265263;
+    x = (x ^ (x >> 13)) * 1274126177;
+    x = (x ^ (x >> 16)) >>> 0;
+    return x / 4294967295;
+  }
+  function fade(t){ return t*t*t*(t*(t*6-15)+10); }
+  function lerp(a,b,t){ return a+(b-a)*t; }
+  function noise2D(x,z){
+    const x0 = Math.floor(x), z0 = Math.floor(z);
+    const x1 = x0+1, z1 = z0+1;
+    const sx = fade(x-x0), sz = fade(z-z0);
+    // seed into hash by offsetting coords
+    const ox = (saveState.seed % 9973), oz = (saveState.seed % 7963);
+    const n00 = hash2i(x0+ox, z0+oz), n10 = hash2i(x1+ox, z0+oz);
+    const n01 = hash2i(x0+ox, z1+oz), n11 = hash2i(x1+ox, z1+oz);
+    const ix0 = lerp(n00,n10,sx), ix1 = lerp(n01,n11,sx);
+    return lerp(ix0,ix1,sz);
+  }
+  function fbm(x,z,oct=5){
+    let v=0, amp=1, freq=1, sum=0;
+    for(let i=0;i<oct;i++){
+      v += (noise2D(x*freq, z*freq)*2-1)*amp;
+      sum += amp;
+      amp *= 0.5;
+      freq *= 2.0;
+    }
+    return v/sum;
+  }
+  function heightAt(x,z){
+    const plains = fbm(x*0.008, z*0.008, 5) * 6.0;
+    const mx = 0, mz = -140;
+    const dx = x-mx, dz=z-mz;
+    const r2 = dx*dx+dz*dz;
+    const sigma = 170;
+    const mountain = Math.exp(-r2/(2*sigma*sigma)) * 110.0;
+    const rocky = fbm(x*0.03, z*0.03, 4) * 8.0 * (mountain/110.0);
+    return plains + mountain + rocky;
+  }
+
+  const groundSize = 2400;
+  const seg = 240;
+  const groundGeo = new THREE.PlaneGeometry(groundSize, groundSize, seg, seg);
+  {
+    const pos = groundGeo.attributes.position;
+    for (let i=0;i<pos.count;i++){
+      const x = pos.getX(i);
+      const z = pos.getY(i); // after rotation becomes Z
+      pos.setZ(i, heightAt(x,z));
+    }
+    groundGeo.computeVertexNormals();
+  }
+
+  const groundMat = new THREE.MeshStandardMaterial({
+    map: texGrass,
+    normalMap: nrmGrass,
+    roughness: 1.0,
+    metalness: 0.0
+  });
+
+  const ground = new THREE.Mesh(groundGeo, groundMat);
+  ground.rotation.x = -Math.PI/2;
+  ground.receiveShadow = true;
+  scene.add(ground);
+
+  // ---------------- World objects ----------------
+  const interactables = [];
+  const trees = new Map();   // id -> group
+  const stones = new Map();  // id -> mesh
+  const removedTrees = new Set(saveState.removed.trees);
+  const removedStones = new Set(saveState.removed.stones);
+
+  const trunkMat = new THREE.MeshStandardMaterial({
+    map: texBark,
+    normalMap: nrmBark,
+    roughness: 1.0,
+    metalness: 0.0
+  });
+  const leafMat = new THREE.MeshStandardMaterial({
+    map: texLeaf,
+    normalMap: nrmLeaf,
+    roughness: 1.0,
+    metalness: 0.0
+  });
+  const rockMat = new THREE.MeshStandardMaterial({
+    map: texRock,
+    normalMap: nrmRock,
+    roughness: 0.95,
+    metalness: 0.0
+  });
+
+  function addTree(id, x, z){
+    if (removedTrees.has(id)) return;
+    const y = heightAt(x,z);
+
+    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(2.2, 2.8, 22, 12), trunkMat);
+    trunk.castShadow = true; trunk.receiveShadow = true;
+    trunk.position.set(x, y+11, z);
+
+    const crown = new THREE.Mesh(new THREE.SphereGeometry(10.5, 16, 12), leafMat);
+    crown.castShadow = true; crown.receiveShadow = true;
+    crown.position.set(x, y+27, z);
+
+    const g = new THREE.Group();
+    g.add(trunk, crown);
+    g.userData = { type:"tree", id, hp: 10, maxHp: 10, x, z, markerLocal: null };
+
+    trunk.userData = { type:"treeTrunk", treeId: id };
+
+    scene.add(g);
+    interactables.push(trunk);
+    trees.set(id, g);
+
+    // initial marker
+    setTreeMarkerRandom(g);
+  }
+
+  function addStonePickup(id, x, z){
+    if (removedStones.has(id)) return;
+    const y = heightAt(x,z);
+    const m = new THREE.Mesh(new THREE.DodecahedronGeometry(3.2, 0), rockMat);
+    m.castShadow = true; m.receiveShadow = true;
+    m.position.set(x, y+3.2, z);
+    m.rotation.y = Math.random()*Math.PI*2;
+    m.userData = { type:"stonePickup", id };
+    scene.add(m);
+    interactables.push(m);
+    stones.set(id, m);
+  }
+
+  // Generate world with seed (deterministic positions)
+  const rngWorld = makeRNG((saveState.seed ^ 0x7F19C3) >>> 0);
+
+  const treeCount = 90;
+  for (let i=0;i<treeCount;i++){
+    const x = (rngWorld()-0.5) * 1500;
+    const z = (rngWorld()-0.5) * 1500;
+    if (heightAt(x,z) > 92) continue;
+    addTree(`t${i}`, x, z);
+  }
+
+  const stoneCount = 70;
+  for (let i=0;i<stoneCount;i++){
+    const x = (rngWorld()-0.5) * 1200;
+    const z = (rngWorld()-0.5) * 1200;
+    if (heightAt(x,z) > 98) continue;
+    addStonePickup(`s${i}`, x, z);
+  }
+
+  // ---------------- Player (FPS, no inverted mouse, no flying) ----------------
+  const player = {
+    pos: new THREE.Vector3(0, 0, 220),
+    velY: 0,
+    yaw: 0,
+    pitch: 0,
+    eye: 16,
+    walk: 68,
+    run: 110,
+    jump: 6.5,
+    gravity: 20
+  };
+
+  if (hasSave){
+    player.pos.set(saveState.player.x, saveState.player.y, saveState.player.z);
+    player.yaw = saveState.player.yaw ?? 0;
+    player.pitch = saveState.player.pitch ?? 0;
+  }
+
+  // clamp to ground on start
+  player.pos.y = Math.max(player.pos.y, heightAt(player.pos.x, player.pos.z) + player.eye);
+
+  const keys = new Set();
+  addEventListener("keydown", (e)=>{
+    if (e.code === "Tab"){
+      e.preventDefault();
+      toggleInventory();
+      return;
+    }
+    keys.add(e.code);
+    // hotbar select
+    if (e.code === "Digit1") setEquip(1);
+    if (e.code === "Digit2") setEquip(2);
+  });
+  addEventListener("keyup", (e)=> keys.delete(e.code));
+
+  let pointerLocked = false;
+  document.addEventListener("pointerlockchange", ()=>{
+    pointerLocked = (document.pointerLockElement === renderer.domElement);
+  });
+
+  renderer.domElement.addEventListener("mousedown", ()=>{
+    if (invOpen) return;
+    if (!pointerLocked) renderer.domElement.requestPointerLock();
+  });
+
+  addEventListener("mousemove", (e)=>{
+    if (!pointerLocked || invOpen) return;
+    const sens = 0.0022;
+    player.yaw   -= e.movementX * sens;
+    // FIX inversion: movementY positive (mouse down) should look down -> pitch positive in three looks down
+    player.pitch += e.movementY * sens;
+    player.pitch = THREE.MathUtils.clamp(player.pitch, -1.25, 1.25);
+  });
+
+  function forwardXZ(){
+    // only yaw affects movement (so you don't "fly" when looking up/down)
+    return new THREE.Vector3(Math.sin(player.yaw), 0, -Math.cos(player.yaw)).normalize();
+  }
+  function rightXZ(){
+    return new THREE.Vector3(Math.cos(player.yaw), 0, Math.sin(player.yaw)).normalize();
+  }
+
+  // ---------------- Viewmodel (tool in hands) + swing animation ----------------
+  const viewmodel = new THREE.Group();
+  camera.add(viewmodel);
+  scene.add(camera);
+
+  const tool = {
+    current: "rock", // rock | axe
+    swing: 0,        // 0..1
+    swinging: false,
+    cooldown: 0
+  };
+
+  function makeRockToolMesh(){
+    const m = new THREE.Mesh(
+      new THREE.DodecahedronGeometry(1.05, 0),
+      new THREE.MeshStandardMaterial({ map: texRock, normalMap: nrmRock, roughness: 0.95, metalness: 0.0 })
+    );
+    m.castShadow = false; m.receiveShadow = false;
+    return m;
+  }
+  function makeAxeMesh(){
+    const g = new THREE.Group();
+    const handle = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.12, 0.16, 3.2, 10),
+      new THREE.MeshStandardMaterial({ map: texBark, normalMap: nrmBark, roughness: 1.0 })
+    );
+    handle.position.set(0, -0.2, 0);
+    handle.rotation.z = 0.15;
+    const head = new THREE.Mesh(
+      new THREE.BoxGeometry(1.25, 0.65, 0.35),
+      new THREE.MeshStandardMaterial({ color: 0xb9c1c9, roughness: 0.35, metalness: 0.8 })
+    );
+    head.position.set(0.65, 1.0, 0);
+    head.rotation.z = 0.15;
+    g.add(handle, head);
+    return g;
+  }
+
+  const rockToolMesh = makeRockToolMesh();
+  const axeMesh = makeAxeMesh();
+
+  function setToolVisual(name){
+    viewmodel.clear();
+    if (name === "axe") viewmodel.add(axeMesh);
+    else viewmodel.add(rockToolMesh);
+
+    // base pose near right bottom of screen
+    viewmodel.position.set(0.55, -0.45, -0.9);
+    viewmodel.rotation.set(-0.25, 0.35, 0.15);
+    viewmodel.scale.setScalar(10.5);
+  }
+
+  // equip slots:
+  function setEquip(slot){
+    saveState.equip.slot = slot;
+    // slot 1: rock always
+    // slot 2: axe only if crafted
+    if (slot === 2 && !saveState.inv.hasAxe) {
+      saveState.equip.slot = 1;
+    }
+    const hb1 = document.getElementById("hb1");
+    const hb2 = document.getElementById("hb2");
+    hb1.classList.toggle("active", saveState.equip.slot === 1);
+    hb2.classList.toggle("active", saveState.equip.slot === 2);
+
+    tool.current = (saveState.equip.slot === 2) ? "axe" : "rock";
+    setToolVisual(tool.current);
+    writeSave();
+  }
+
+  // initial equip
+  setEquip(saveState.equip.slot || 1);
+
+  function startSwing(){
+    tool.swinging = true;
+    tool.swing = 0;
+  }
+
+  // ---------------- Inventory UI + Craft ----------------
+  const invOverlay = document.getElementById("invOverlay");
+  const invGrid = document.getElementById("invGrid");
+  const craftAxeBtn = document.getElementById("craftAxeBtn");
+  const craftAxeReq = document.getElementById("craftAxeReq");
+
+  let invOpen = false;
+
+  function toggleInventory(){
+    invOpen = !invOpen;
+    invOverlay.style.display = invOpen ? "block" : "none";
+    if (invOpen){
+      if (pointerLocked) document.exitPointerLock();
+      renderInventory();
+    } else {
+      // no auto lock (как в играх — клик для захвата)
+      writeSave();
+    }
+  }
+
+  function canCraftAxe(){
+    return !saveState.inv.hasAxe && saveState.inv.wood >= 30 && saveState.inv.stone >= 15;
+  }
+
+  craftAxeBtn.addEventListener("click", ()=>{
+    if (!invOpen) return;
+    if (!canCraftAxe()) return;
+    saveState.inv.wood -= 30;
+    saveState.inv.stone -= 15;
+    saveState.inv.hasAxe = true;
+    setEquip(2);
+    updateHUD();
+    renderInventory();
+    writeSave();
+  });
+
+  function renderInventory(){
+    invGrid.innerHTML = "";
+
+    // Build “clean” inventory: show stacks (wood/stone) + axe if have
+    const slots = [];
+    // put resources first
+    if (saveState.inv.wood > 0) slots.push({ icon: iconWood, n: saveState.inv.wood });
+    if (saveState.inv.stone > 0) slots.push({ icon: iconStone, n: saveState.inv.stone });
+    if (saveState.inv.hasAxe) slots.push({ icon: iconAxe, n: 1 });
+
+    const totalSlots = 30;
+    for (let i=0;i<totalSlots;i++){
+      const s = document.createElement("div");
+      s.className = "invSlot";
+
+      if (slots[i]){
+        const img = document.createElement("img");
+        img.src = slots[i].icon.toDataURL("image/png");
+        s.appendChild(img);
+
+        const n = document.createElement("div");
+        n.className = "n";
+        n.textContent = (slots[i].n > 1) ? slots[i].n : "";
+        s.appendChild(n);
+      }
+      invGrid.appendChild(s);
+    }
+
+    craftAxeBtn.disabled = !canCraftAxe();
+    craftAxeReq.textContent = "REQ: 30 WOOD, 15 STONE";
+  }
+
+  // ---------------- HUD counters ----------------
+  const woodCountEl = document.getElementById("woodCount");
+  const stoneCountEl = document.getElementById("stoneCount");
+  function updateHUD(){
+    woodCountEl.textContent = saveState.inv.wood;
+    stoneCountEl.textContent = saveState.inv.stone;
+    // hide axe icon in hotbar if not crafted
+    icoAxeEl.style.opacity = saveState.inv.hasAxe ? "1" : "0.15";
+  }
+  updateHUD();
+
+  // ---------------- Interaction: raycast + prompt + Rust-like hit marker ----------------
+  const raycaster = new THREE.Raycaster();
+  const center = new THREE.Vector2(0,0);
+  const promptEl = document.getElementById("prompt");
+  const hitXEl = document.getElementById("hitX");
+
+  const interactDist = 34;
+  let target = null; // {type, obj, treeId, point, dist}
+  const tmpV = new THREE.Vector3();
+
+  // Tree marker (Rust X)
+  let activeTreeId = null;
+  let activeMarkerWorld = null;
+
+  function setTreeMarkerRandom(treeGroup){
+    // marker on trunk surface near mid height
+    const trunk = treeGroup.children[0];
+    const angle = Math.random() * Math.PI*2;
+    const height = 5 + Math.random()*11;
+    const radius = 2.55;
+    const local = new THREE.Vector3(Math.cos(angle)*radius, height, Math.sin(angle)*radius);
+    treeGroup.userData.markerLocal = local;
+  }
+
+  function worldToScreen(pos){
+    const p = pos.clone().project(camera);
+    return {
+      x: (p.x*0.5 + 0.5) * innerWidth,
+      y: (-p.y*0.5 + 0.5) * innerHeight,
+      on: p.z < 1
+    };
+  }
+
+  function updateTarget(){
+    promptEl.style.display = "none";
+    hitXEl.style.display = "none";
+    target = null;
+
+    raycaster.setFromCamera(center, camera);
+    const hits = raycaster.intersectObjects(interactables, false);
+    if (!hits.length) { activeTreeId = null; return; }
+
+    const h = hits[0];
+    if (h.distance > interactDist) { activeTreeId = null; return; }
+
+    const obj = h.object;
+    const ud = obj.userData;
+
+    if (ud.type === "stonePickup"){
+      target = { type:"stonePickup", obj, id: ud.id, point: h.point, dist: h.distance };
+      promptEl.textContent = "E  PICK UP";
+      promptEl.style.display = "block";
+      activeTreeId = null;
+      return;
+    }
+
+    if (ud.type === "treeTrunk"){
+      const treeId = ud.treeId;
+      const tree = trees.get(treeId);
+      if (!tree) { activeTreeId = null; return; }
+
+      target = { type:"tree", obj, treeId, point: h.point, dist: h.distance };
+
+      // show hit marker X in correct place on trunk
+      activeTreeId = treeId;
+      const local = tree.userData.markerLocal;
+      if (local){
+        activeMarkerWorld = local.clone();
+        tree.localToWorld(activeMarkerWorld);
+
+        const s = worldToScreen(activeMarkerWorld);
+        if (s.on){
+          hitXEl.style.left = `${s.x}px`;
+          hitXEl.style.top = `${s.y}px`;
+          hitXEl.style.display = "block";
+        }
+      }
+      return;
+    }
+
+    activeTreeId = null;
+  }
+
+  // ---------------- Actions: pick up, hit (LMB) ----------------
+  addEventListener("keydown", (e)=>{
+    if (e.code !== "KeyE") return;
+    if (!target || invOpen) return;
+
+    if (target.type === "stonePickup"){
+      // remove stone
+      const id = target.id;
+      const m = stones.get(id);
+      if (m){
+        scene.remove(m);
+        stones.delete(id);
+        const idx = interactables.indexOf(m);
+        if (idx >= 0) interactables.splice(idx,1);
+      }
+      removedStones.add(id);
+      saveState.removed.stones = Array.from(removedStones);
+
+      saveState.inv.stone += 1;
+      updateHUD();
+      writeSave();
+    }
+  });
+
+  function toolStats(){
+    if (tool.current === "axe") return { dmg: 2, cd: 0.22 };
+    return { dmg: 1, cd: 0.33 };
+  }
+
+  function damageTree(tree, hitPointWorld){
+    const stats = toolStats();
+    let dmg = stats.dmg;
+
+    // bonus if close to marker
+    if (tree.userData.markerLocal){
+      const markerW = tree.userData.markerLocal.clone();
+      tree.localToWorld(markerW);
+      const dist = markerW.distanceTo(hitPointWorld);
+      if (dist < 2.4) dmg *= 2; // “правильный крестик”
+      // move marker after each hit (как в Rust)
+      setTreeMarkerRandom(tree);
+    }
+
+    tree.userData.hp -= dmg;
+
+    if (tree.userData.hp <= 0){
+      // remove tree
+      const trunk = tree.children[0];
+      const idx = interactables.indexOf(trunk);
+      if (idx >= 0) interactables.splice(idx,1);
+      scene.remove(tree);
+      trees.delete(tree.userData.id);
+
+      removedTrees.add(tree.userData.id);
+      saveState.removed.trees = Array.from(removedTrees);
+
+      // loot (просто в инвентарь)
+      saveState.inv.wood += 20;
+      updateHUD();
+      writeSave();
+    }
+  }
+
+  addEventListener("mousedown", (e)=>{
+    if (e.button !== 0) return;
+    if (invOpen) return;
+    if (tool.cooldown > 0) return;
+    if (!pointerLocked) return;
+
+    const stats = toolStats();
+    tool.cooldown = stats.cd;
+    startSwing();
+
+    if (target?.type === "tree"){
+      const tree = trees.get(target.treeId);
+      if (tree) damageTree(tree, target.point);
+    }
+  });
+
+  // ---------------- Loop / Physics ----------------
+  const clock = new THREE.Clock();
+
+  function tick(){
+    requestAnimationFrame(tick);
+    const dt = Math.min(clock.getDelta(), 0.033);
+
+    // cooldown + swing anim
+    tool.cooldown = Math.max(0, tool.cooldown - dt);
+    if (tool.swinging){
+      tool.swing += dt * 7.5;
+      if (tool.swing >= 1){
+        tool.swing = 1;
+        tool.swinging = false;
+      }
+      // swing pose
+      const t = tool.swing;
+      const ease = t < 0.5 ? (t*2) : (1 - (t-0.5)*2);
+      viewmodel.rotation.x = -0.25 + ease * 0.95;
+      viewmodel.rotation.y =  0.35 - ease * 0.30;
+      viewmodel.rotation.z =  0.15 - ease * 0.55;
+      viewmodel.position.y = -0.45 - ease * 0.10;
+      viewmodel.position.x =  0.55 + ease * 0.08;
+    } else {
+      // idle pose
+      viewmodel.position.set(0.55, -0.45, -0.9);
+      viewmodel.rotation.set(-0.25, 0.35, 0.15);
+    }
+
+    // movement (WASD not inverted)
+    if (!invOpen){
       let mx=0, mz=0;
       if (keys.has("KeyW")) mz -= 1;
       if (keys.has("KeyS")) mz += 1;
@@ -770,35 +1182,79 @@
       if (keys.has("KeyD")) mx += 1;
 
       const running = keys.has("ShiftLeft") || keys.has("ShiftRight");
-      const speed = running ? player.speedRun : player.speedWalk;
+      const speed = running ? player.run : player.walk;
 
       if (mx !== 0 || mz !== 0){
-        const f = forwardVector(); f.y = 0; f.normalize();
-        const r = rightVector();   r.y = 0; r.normalize();
-        const dir = new THREE.Vector3().addScaledVector(r, mx).addScaledVector(f, mz).normalize();
+        const f = forwardXZ();
+        const r = rightXZ();
+        const dir = new THREE.Vector3()
+          .addScaledVector(r, mx)
+          .addScaledVector(f, mz)
+          .normalize();
         player.pos.addScaledVector(dir, speed * dt);
       }
 
-      // keep above ground
-      const gy = heightAt(player.pos.x, player.pos.z);
-      player.pos.y = gy + player.eye;
+      // gravity + ground collision (no flying)
+      const groundY = heightAt(player.pos.x, player.pos.z) + player.eye;
+      const onGround = player.pos.y <= groundY + 0.01;
 
-      // apply camera rotation
-      camera.position.copy(player.pos);
-      camera.rotation.set(player.pitch, player.yaw, 0, "YXZ");
+      if (onGround){
+        player.pos.y = groundY;
+        player.velY = 0;
 
-      updateTarget();
-
-      renderer.render(scene, camera);
+        if (keys.has("Space")){
+          player.velY = player.jump;
+          player.pos.y += 0.02;
+        }
+      } else {
+        player.velY -= player.gravity * dt;
+        player.pos.y += player.velY * dt;
+        if (player.pos.y < groundY){
+          player.pos.y = groundY;
+          player.velY = 0;
+        }
+      }
     }
-    animate();
 
-    addEventListener("resize", ()=>{
-      camera.aspect = innerWidth/innerHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(innerWidth, innerHeight);
-      renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
-    });
-  </script>
+    // camera transform
+    camera.position.copy(player.pos);
+    camera.rotation.set(player.pitch, player.yaw, 0, "YXZ");
+
+    // prompt + marker update
+    if (!invOpen) updateTarget();
+    else {
+      promptEl.style.display = "none";
+      hitXEl.style.display = "none";
+    }
+
+    // update save state periodically
+    saveState.player.x = player.pos.x;
+    saveState.player.y = player.pos.y;
+    saveState.player.z = player.pos.z;
+    saveState.player.yaw = player.yaw;
+    saveState.player.pitch = player.pitch;
+
+    renderer.render(scene, camera);
+  }
+  tick();
+
+  // autosave
+  setInterval(writeSave, 2500);
+  addEventListener("beforeunload", writeSave);
+
+  // ---------------- Inventory grid init ----------------
+  renderInventory();
+
+  // ---------------- Hide/show HB2 based on craft ----------------
+  updateHUD();
+
+  // ---------------- Resize ----------------
+  addEventListener("resize", ()=>{
+    camera.aspect = innerWidth/innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(innerWidth, innerHeight);
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  });
+</script>
 </body>
 </html>
