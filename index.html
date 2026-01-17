@@ -3,158 +3,135 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>3D Море (Three.js)</title>
+  <title>3D Море</title>
+
+  <!-- убирает 404 на favicon.ico -->
+  <link rel="icon" href="data:,">
+
   <style>
     html, body { height: 100%; margin: 0; overflow: hidden; background:#000; }
     canvas { display:block; }
-    #hint{
-      position:fixed; left:12px; top:12px; z-index:10;
-      font: 13px/1.35 system-ui, -apple-system, Segoe UI, Roboto, Arial;
-      color: rgba(255,255,255,.85);
-      background: rgba(0,0,0,.35);
-      padding: 10px 12px; border-radius: 10px;
-      backdrop-filter: blur(6px);
-      user-select:none;
-    }
   </style>
+
+  <!-- ВАЖНО: importmap должен быть ДО <script type="module"> -->
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+    }
+  }
+  </script>
 </head>
 <body>
-  <div id="hint">
-    Мышь: вращение • Колесо: зум • ПКМ: панорама<br>
-    Подсказка: открой через локальный сервер (ниже).
-  </div>
+<script type="module">
+  import * as THREE from "three";
+  import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+  import { Water } from "three/addons/objects/Water.js";
+  import { Sky } from "three/addons/objects/Sky.js";
 
-  <script type="module">
-    import * as THREE from "https://unpkg.com/three@0.160.0/build/three.module.js";
-    import { OrbitControls } from "https://unpkg.com/three@0.160.0/examples/jsm/controls/OrbitControls.js";
-    import { Water } from "https://unpkg.com/three@0.160.0/examples/jsm/objects/Water.js";
-    import { Sky } from "https://unpkg.com/three@0.160.0/examples/jsm/objects/Sky.js";
+  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  renderer.setSize(innerWidth, innerHeight);
+  renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.05;
+  renderer.physicallyCorrectLights = true;
+  document.body.appendChild(renderer.domElement);
 
-    // Renderer
-    const renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  const scene = new THREE.Scene();
+  scene.fog = new THREE.FogExp2(0x0b1520, 0.00008);
+
+  const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.1, 20000);
+  camera.position.set(0, 55, 180);
+
+  const controls = new OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true;
+  controls.maxPolarAngle = Math.PI * 0.49;
+  controls.minDistance = 30;
+  controls.maxDistance = 900;
+
+  // Sky
+  const sky = new Sky();
+  sky.scale.setScalar(10000);
+  scene.add(sky);
+
+  const skyU = sky.material.uniforms;
+  skyU.turbidity.value = 8.0;
+  skyU.rayleigh.value = 2.2;
+  skyU.mieCoefficient.value = 0.006;
+  skyU.mieDirectionalG.value = 0.82;
+
+  const sun = new THREE.Vector3();
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  let envRT = null;
+
+  const sunLight = new THREE.DirectionalLight(0xffffff, 4.2);
+  scene.add(sunLight);
+  scene.add(sunLight.target);
+
+  const hemi = new THREE.HemisphereLight(0xbfe9ff, 0x061018, 0.35);
+  scene.add(hemi);
+
+  function updateSun(elev = 10, azim = 175) {
+    const phi = THREE.MathUtils.degToRad(90 - elev);
+    const theta = THREE.MathUtils.degToRad(azim);
+    sun.setFromSphericalCoords(1, phi, theta);
+
+    skyU.sunPosition.value.copy(sun);
+
+    if (envRT) envRT.dispose();
+    envRT = pmrem.fromScene(sky);
+    scene.environment = envRT.texture;
+
+    sunLight.position.copy(sun).multiplyScalar(2000);
+    sunLight.target.position.set(0, 0, 0);
+    sunLight.target.updateMatrixWorld();
+  }
+
+  // Water normals (лучше хранить локально, но пока можно так)
+  const texLoader = new THREE.TextureLoader();
+  texLoader.setCrossOrigin("anonymous");
+
+  const waterNormals = texLoader.load(
+    "https://threejs.org/examples/textures/waternormals.jpg",
+    (t) => {
+      t.wrapS = t.wrapT = THREE.RepeatWrapping;
+      t.repeat.set(12, 12);
+    }
+  );
+
+  const waterGeo = new THREE.PlaneGeometry(12000, 12000);
+  const water = new Water(waterGeo, {
+    textureWidth: 1024,
+    textureHeight: 1024,
+    waterNormals,
+    sunDirection: new THREE.Vector3(1, 1, 1),
+    sunColor: 0xffffff,
+    waterColor: 0x0a3b55,
+    distortionScale: 4.2,
+    fog: true
+  });
+  water.rotation.x = -Math.PI / 2;
+  scene.add(water);
+
+  updateSun(10, 175);
+
+  const clock = new THREE.Clock();
+  function animate() {
+    requestAnimationFrame(animate);
+    water.material.uniforms.time.value += clock.getDelta() * 0.8;
+    controls.update();
+    renderer.render(scene, camera);
+  }
+  animate();
+
+  addEventListener("resize", () => {
+    camera.aspect = innerWidth / innerHeight;
+    camera.updateProjectionMatrix();
     renderer.setSize(innerWidth, innerHeight);
-    renderer.outputColorSpace = THREE.SRGBColorSpace;
-    renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.05;
-    renderer.physicallyCorrectLights = true;
-    document.body.appendChild(renderer.domElement);
-
-    // Scene & camera
-    const scene = new THREE.Scene();
-    scene.fog = new THREE.FogExp2(0x0b1520, 0.00008);
-
-    const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.1, 20000);
-    camera.position.set(0, 55, 180);
-
-    const controls = new OrbitControls(camera, renderer.domElement);
-    controls.enableDamping = true;
-    controls.dampingFactor = 0.05;
-    controls.maxPolarAngle = Math.PI * 0.49; // не даём камере уйти под воду
-    controls.minDistance = 30;
-    controls.maxDistance = 900;
-
-    // Sky (физически-похожее небо)
-    const sky = new Sky();
-    sky.scale.setScalar(10000);
-    scene.add(sky);
-
-    const skyU = sky.material.uniforms;
-    skyU["turbidity"].value = 8.0;
-    skyU["rayleigh"].value = 2.2;
-    skyU["mieCoefficient"].value = 0.006;
-    skyU["mieDirectionalG"].value = 0.82;
-
-    // Sun position (для красивого освещения)
-    const sun = new THREE.Vector3();
-    const pmrem = new THREE.PMREMGenerator(renderer);
-    let envRT = null;
-
-    function updateSun(elevationDeg = 9, azimuthDeg = 175) {
-      const phi = THREE.MathUtils.degToRad(90 - elevationDeg);
-      const theta = THREE.MathUtils.degToRad(azimuthDeg);
-
-      sun.setFromSphericalCoords(1, phi, theta);
-
-      skyU["sunPosition"].value.copy(sun);
-
-      if (envRT) envRT.dispose();
-      envRT = pmrem.fromScene(sky);
-      scene.environment = envRT.texture;
-
-      // Направленный свет "солнце"
-      sunLight.position.copy(sun).multiplyScalar(2000);
-      sunLight.target.position.set(0, 0, 0);
-      sunLight.target.updateMatrixWorld();
-    }
-
-    // Lights (добавляем чуть-чуть, но основа — окружение от неба)
-    const sunLight = new THREE.DirectionalLight(0xffffff, 4.2);
-    scene.add(sunLight);
-    scene.add(sunLight.target);
-
-    const hemi = new THREE.HemisphereLight(0xbfe9ff, 0x061018, 0.35);
-    scene.add(hemi);
-
-    // Water (море)
-    const texLoader = new THREE.TextureLoader();
-    texLoader.setCrossOrigin("anonymous");
-
-    const waterNormals = texLoader.load(
-      "https://threejs.org/examples/textures/waternormals.jpg",
-      (t) => {
-        t.wrapS = t.wrapT = THREE.RepeatWrapping;
-        t.repeat.set(12, 12);
-        t.colorSpace = THREE.SRGBColorSpace;
-      }
-    );
-
-    const waterGeo = new THREE.PlaneGeometry(12000, 12000);
-    const water = new Water(waterGeo, {
-      textureWidth: 1024,
-      textureHeight: 1024,
-      waterNormals,
-      sunDirection: new THREE.Vector3(1, 1, 1),
-      sunColor: 0xffffff,
-      waterColor: 0x0a3b55,
-      distortionScale: 4.2,
-      fog: true
-    });
-    water.rotation.x = -Math.PI / 2;
-    water.position.y = 0;
-    scene.add(water);
-
-    updateSun(10, 175);
-
-    // Animation
-    const clock = new THREE.Clock();
-
-    function animate() {
-      requestAnimationFrame(animate);
-      const dt = clock.getDelta();
-
-      water.material.uniforms["time"].value += dt * 0.8;
-
-      controls.update();
-      renderer.render(scene, camera);
-    }
-    animate();
-
-    // Resize
-    addEventListener("resize", () => {
-      camera.aspect = innerWidth / innerHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(innerWidth, innerHeight);
-      renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
-    });
-
-    // Подсказка по запуску (если открыть file://, модули/текстуры могут не грузиться)
-    console.log(
-      "Запуск:\n" +
-      "1) сохрани как sea.html\n" +
-      "2) в папке:  python -m http.server 8000\n" +
-      "3) открой: http://localhost:8000/sea.html"
-    );
-  </script>
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  });
+</script>
 </body>
 </html>
