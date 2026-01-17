@@ -3,25 +3,120 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Равнина + гора + персонаж (Three.js)</title>
+  <title>Rust-like: дерево/камень/инвентарь (Three.js)</title>
   <link rel="icon" href="data:,">
+
   <style>
     html, body { height:100%; margin:0; overflow:hidden; background:#000; }
     canvas { display:block; }
-    #ui{
-      position:fixed; left:12px; top:12px; z-index:10;
-      font: 13px/1.35 system-ui, -apple-system, Segoe UI, Roboto, Arial;
-      color: rgba(255,255,255,.9);
-      background: rgba(0,0,0,.35);
-      padding: 10px 12px; border-radius: 12px;
-      backdrop-filter: blur(6px);
-      user-select:none;
-      max-width: 360px;
+
+    #hud {
+      position: fixed; inset: 0; pointer-events: none;
+      font: 14px/1.2 system-ui, -apple-system, Segoe UI, Roboto, Arial;
+      color: rgba(255,255,255,.92);
     }
-    #ui b{ font-weight:650; }
+    #topLeft {
+      position: fixed; left: 12px; top: 12px;
+      background: rgba(0,0,0,.35);
+      border: 1px solid rgba(255,255,255,.08);
+      border-radius: 12px;
+      padding: 10px 12px;
+      backdrop-filter: blur(6px);
+      pointer-events: auto;
+    }
+    #topLeft button{
+      cursor: pointer;
+      border: 1px solid rgba(255,255,255,.12);
+      background: rgba(255,255,255,.08);
+      color: rgba(255,255,255,.95);
+      border-radius: 10px;
+      padding: 8px 10px;
+      margin-top: 8px;
+    }
+    #topLeft small{ opacity:.9; display:block; margin-top:6px; }
+
+    #prompt {
+      position: fixed; left: 50%; top: 56%;
+      transform: translate(-50%, -50%);
+      padding: 10px 12px;
+      border-radius: 12px;
+      background: rgba(0,0,0,.35);
+      border: 1px solid rgba(255,255,255,.08);
+      backdrop-filter: blur(6px);
+      display: none;
+      white-space: nowrap;
+    }
+
+    #crosshair {
+      position: fixed; left: 50%; top: 50%;
+      width: 16px; height: 16px;
+      transform: translate(-50%, -50%);
+      opacity: .85;
+    }
+    #crosshair:before, #crosshair:after {
+      content:""; position:absolute; left:50%; top:50%;
+      background: rgba(255,255,255,.9);
+      transform: translate(-50%, -50%);
+      border-radius: 2px;
+    }
+    #crosshair:before { width: 2px; height: 16px; }
+    #crosshair:after  { width: 16px; height: 2px; }
+
+    #hotbar {
+      position: fixed; left: 50%; bottom: 18px;
+      transform: translateX(-50%);
+      display: flex; gap: 8px;
+      pointer-events: none;
+    }
+    .slot {
+      width: 58px; height: 58px;
+      border-radius: 14px;
+      background: rgba(0,0,0,.35);
+      border: 1px solid rgba(255,255,255,.10);
+      backdrop-filter: blur(6px);
+      position: relative;
+      overflow: hidden;
+    }
+    .slot.active { outline: 2px solid rgba(255,255,255,.35); }
+    .slot img {
+      width: 44px; height: 44px;
+      position: absolute; left: 7px; top: 7px;
+      image-rendering: auto;
+    }
+    .slot .count{
+      position:absolute; right:7px; bottom:6px;
+      font-size: 12px;
+      opacity: .95;
+      text-shadow: 0 1px 2px rgba(0,0,0,.65);
+    }
+
+    #resources {
+      position: fixed; right: 12px; top: 12px;
+      background: rgba(0,0,0,.35);
+      border: 1px solid rgba(255,255,255,.08);
+      border-radius: 12px;
+      padding: 10px 12px;
+      backdrop-filter: blur(6px);
+      min-width: 140px;
+    }
+    .resRow { display:flex; align-items:center; gap:8px; margin: 6px 0; }
+    .resRow img{ width: 22px; height: 22px; border-radius: 6px; }
+    .resRow span{ opacity:.95; }
+
+    #centerTip {
+      position: fixed; left: 50%; top: 14px;
+      transform: translateX(-50%);
+      background: rgba(0,0,0,.30);
+      border: 1px solid rgba(255,255,255,.08);
+      border-radius: 12px;
+      padding: 8px 10px;
+      backdrop-filter: blur(6px);
+      opacity: .92;
+      pointer-events: none;
+    }
   </style>
 
-  <!-- Чтобы GitHub Pages понимал import "three" -->
+  <!-- GitHub Pages: чтобы работали import "three" -->
   <script type="importmap">
   {
     "imports": {
@@ -31,21 +126,207 @@
   }
   </script>
 </head>
+
 <body>
-  <div id="ui">
-    <b>WASD</b> — ходьба персонажа • <b>Мышь</b> — камера (Orbit)<br>
-    Персонаж: <b>Soldier.glb</b> (пример three.js).<br>
-    Если модель не загрузится — напиши, покажу как положить её в репо локально.
+  <div id="hud">
+    <div id="topLeft">
+      Управление: <b>WASD</b> ходьба • <b>Shift</b> бег • <b>E</b> поднять • <b>ЛКМ</b> рубить<br>
+      Клик по экрану — <b>захват мыши</b> (как в играх FPS). Esc — отпустить.
+      <button id="btnDownload">Скачать текстуры (PNG)</button>
+      <small>Персонаж: Soldier.glb (текстуры модели не трогаю).</small>
+    </div>
+
+    <div id="resources">
+      <div class="resRow"><img id="icoStone" alt=""><span>Stone: <b id="stoneCount">0</b></span></div>
+      <div class="resRow"><img id="icoWood" alt=""><span>Wood: <b id="woodCount">0</b></span></div>
+    </div>
+
+    <div id="centerTip">1: Камень (инструмент) • Целься в предметы в центре экрана</div>
+    <div id="prompt"></div>
+    <div id="crosshair"></div>
+
+    <div id="hotbar">
+      <div class="slot active" id="slot1"><img id="icoRockTool" alt=""><div class="count" id="slot1c">∞</div></div>
+      <div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div>
+    </div>
   </div>
 
   <script type="module">
     import * as THREE from "three";
-    import { OrbitControls } from "three/addons/controls/OrbitControls.js";
     import { Sky } from "three/addons/objects/Sky.js";
     import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 
-    // ---------- Renderer ----------
-    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    // ----------------- Helpers: texture generator -----------------
+    function makeCanvas(size=256) {
+      const c = document.createElement("canvas");
+      c.width = c.height = size;
+      return c;
+    }
+    function clamp01(x){ return Math.max(0, Math.min(1, x)); }
+
+    function makeGrassTile(size=512) {
+      const c = makeCanvas(size), ctx = c.getContext("2d");
+      ctx.fillStyle = "#2f6d3a"; ctx.fillRect(0,0,size,size);
+
+      const img = ctx.getImageData(0,0,size,size);
+      const d = img.data;
+      for (let i=0;i<d.length;i+=4){
+        const n = Math.random();
+        const g = 95 + Math.floor(n*90);
+        d[i+0] = 25 + Math.floor(Math.random()*25);
+        d[i+1] = g;
+        d[i+2] = 25 + Math.floor(Math.random()*30);
+        d[i+3] = 255;
+      }
+      ctx.putImageData(img,0,0);
+
+      ctx.globalAlpha = 0.18;
+      ctx.fillStyle = "#1e4e2a";
+      for (let i=0;i<1800;i++){
+        const x = Math.random()*size, y = Math.random()*size;
+        ctx.fillRect(x,y, 20+Math.random()*70, 1+Math.random()*2);
+      }
+      ctx.globalAlpha = 1;
+      return c;
+    }
+
+    function makeBarkTile(size=512) {
+      const c = makeCanvas(size), ctx = c.getContext("2d");
+      ctx.fillStyle = "#6b4a2e"; ctx.fillRect(0,0,size,size);
+
+      // vertical bark streaks
+      for (let x=0; x<size; x++){
+        const t = x/size;
+        const col = 80 + Math.floor(60*Math.random());
+        ctx.fillStyle = `rgb(${col},${55+Math.floor(35*Math.random())},${35+Math.floor(30*Math.random())})`;
+        const w = 1 + Math.floor(Math.random()*3);
+        ctx.globalAlpha = 0.12 + Math.random()*0.18;
+        ctx.fillRect(x,0,w,size);
+      }
+      ctx.globalAlpha = 1;
+
+      // cracks
+      ctx.strokeStyle = "rgba(10,5,3,.35)";
+      ctx.lineWidth = 2;
+      for (let i=0;i<60;i++){
+        const x = Math.random()*size;
+        ctx.beginPath();
+        ctx.moveTo(x,0);
+        let y=0;
+        for (let k=0;k<12;k++){
+          y += size/12;
+          ctx.lineTo(x + (Math.random()-0.5)*18, y);
+        }
+        ctx.stroke();
+      }
+      return c;
+    }
+
+    function makeLeafTile(size=512) {
+      const c = makeCanvas(size), ctx = c.getContext("2d");
+      ctx.fillStyle = "#1f6b3a"; ctx.fillRect(0,0,size,size);
+
+      // noise dots
+      for (let i=0;i<25000;i++){
+        const x = Math.random()*size, y = Math.random()*size;
+        const a = 0.06 + Math.random()*0.12;
+        const g = 120 + Math.floor(Math.random()*90);
+        ctx.fillStyle = `rgba(${30+Math.floor(Math.random()*20)},${g},${35+Math.floor(Math.random()*25)},${a})`;
+        ctx.fillRect(x,y,1,1);
+      }
+      // lighter clusters
+      ctx.globalAlpha = 0.15;
+      ctx.fillStyle = "#7ccf7a";
+      for (let i=0;i<260;i++){
+        ctx.beginPath();
+        ctx.arc(Math.random()*size, Math.random()*size, 10+Math.random()*30, 0, Math.PI*2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+      return c;
+    }
+
+    function makeRockTile(size=512) {
+      const c = makeCanvas(size), ctx = c.getContext("2d");
+      ctx.fillStyle = "#6f7378"; ctx.fillRect(0,0,size,size);
+
+      const img = ctx.getImageData(0,0,size,size);
+      const d = img.data;
+      for (let i=0;i<d.length;i+=4){
+        const n = Math.random();
+        const v = 90 + Math.floor(n*120);
+        d[i+0] = v - Math.floor(Math.random()*10);
+        d[i+1] = v - Math.floor(Math.random()*8);
+        d[i+2] = v;
+        d[i+3] = 255;
+      }
+      ctx.putImageData(img,0,0);
+
+      // cracks
+      ctx.strokeStyle = "rgba(0,0,0,.20)";
+      ctx.lineWidth = 1;
+      for (let i=0;i<220;i++){
+        ctx.beginPath();
+        const x = Math.random()*size, y = Math.random()*size;
+        ctx.moveTo(x,y);
+        ctx.lineTo(x+(Math.random()-0.5)*60, y+(Math.random()-0.5)*60);
+        ctx.stroke();
+      }
+
+      // highlights
+      ctx.globalAlpha = 0.10;
+      ctx.fillStyle = "#cfd4d8";
+      for (let i=0;i<180;i++){
+        ctx.beginPath();
+        ctx.arc(Math.random()*size, Math.random()*size, 8+Math.random()*26, 0, Math.PI*2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+      return c;
+    }
+
+    function makeIconRock(size=128){
+      const c = makeCanvas(size), ctx = c.getContext("2d");
+      ctx.fillStyle="rgba(0,0,0,0)"; ctx.clearRect(0,0,size,size);
+      ctx.fillStyle="#2b2f34";
+      ctx.beginPath();
+      ctx.moveTo(25,75); ctx.lineTo(45,30); ctx.lineTo(90,35); ctx.lineTo(105,70); ctx.lineTo(78,103); ctx.lineTo(35,98);
+      ctx.closePath(); ctx.fill();
+      ctx.fillStyle="rgba(255,255,255,.20)";
+      ctx.beginPath(); ctx.moveTo(45,35); ctx.lineTo(75,38); ctx.lineTo(62,62); ctx.closePath(); ctx.fill();
+      return c;
+    }
+    function makeIconStone(size=128){
+      const c = makeCanvas(size), ctx = c.getContext("2d");
+      ctx.clearRect(0,0,size,size);
+      ctx.fillStyle="#6f7378";
+      ctx.beginPath();
+      ctx.arc(64,70,38,0,Math.PI*2);
+      ctx.fill();
+      ctx.fillStyle="rgba(255,255,255,.22)";
+      ctx.beginPath();
+      ctx.arc(52,58,16,0,Math.PI*2);
+      ctx.fill();
+      return c;
+    }
+    function makeIconWood(size=128){
+      const c = makeCanvas(size), ctx = c.getContext("2d");
+      ctx.clearRect(0,0,size,size);
+      ctx.fillStyle="#7a4f2a";
+      ctx.beginPath();
+      ctx.roundRect(26,34,76,60,18);
+      ctx.fill();
+      ctx.fillStyle="rgba(0,0,0,.18)";
+      for (let i=0;i<6;i++){
+        ctx.fillRect(34+i*10,38,4,52);
+      }
+      ctx.fillStyle="rgba(255,255,255,.18)";
+      ctx.fillRect(30,40,18,8);
+      return c;
+    }
+
+    // ----------------- Three.js базовая сцена -----------------
+    const renderer = new THREE.WebGLRenderer({ antialias:true });
     renderer.setSize(innerWidth, innerHeight);
     renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
     renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -55,316 +336,465 @@
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     document.body.appendChild(renderer.domElement);
 
-    // ---------- Scene / Camera ----------
     const scene = new THREE.Scene();
-    scene.fog = new THREE.FogExp2(0x0b1520, 0.00055);
+    scene.fog = new THREE.FogExp2(0x0b1520, 0.00065);
 
-    const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.1, 12000);
-    camera.position.set(130, 85, 210);
+    const camera = new THREE.PerspectiveCamera(70, innerWidth/innerHeight, 0.1, 12000);
 
-    const controls = new OrbitControls(camera, renderer.domElement);
-    controls.enableDamping = true;
-    controls.target.set(0, 18, 0);
-
-    // ---------- Sky + Environment ----------
+    // Sky
     const sky = new Sky();
     sky.scale.setScalar(10000);
     scene.add(sky);
-
     const skyU = sky.material.uniforms;
-    skyU.turbidity.value = 7.5;
+    skyU.turbidity.value = 8.0;
     skyU.rayleigh.value = 2.0;
     skyU.mieCoefficient.value = 0.006;
     skyU.mieDirectionalG.value = 0.82;
 
     const pmrem = new THREE.PMREMGenerator(renderer);
     let envRT = null;
-
     const sun = new THREE.Vector3();
-    function setSun(elevDeg = 12, azimDeg = 155) {
-      const phi = THREE.MathUtils.degToRad(90 - elevDeg);
-      const theta = THREE.MathUtils.degToRad(azimDeg);
+
+    const sunLight = new THREE.DirectionalLight(0xffffff, 4.0);
+    sunLight.castShadow = true;
+    sunLight.shadow.mapSize.set(2048,2048);
+    sunLight.shadow.bias = -0.00025;
+    const s = 280;
+    Object.assign(sunLight.shadow.camera, { left:-s, right:s, top:s, bottom:-s, near:1, far:4000 });
+    scene.add(sunLight);
+    scene.add(sunLight.target);
+    scene.add(new THREE.HemisphereLight(0xbfe9ff, 0x071018, 0.35));
+
+    function setSun(elev=12, azim=155){
+      const phi = THREE.MathUtils.degToRad(90 - elev);
+      const theta = THREE.MathUtils.degToRad(azim);
       sun.setFromSphericalCoords(1, phi, theta);
-
       skyU.sunPosition.value.copy(sun);
-
       if (envRT) envRT.dispose();
       envRT = pmrem.fromScene(sky);
       scene.environment = envRT.texture;
 
       sunLight.position.copy(sun).multiplyScalar(1600);
-      sunLight.target.position.set(0, 0, 0);
+      sunLight.target.position.set(0,0,0);
       sunLight.target.updateMatrixWorld();
     }
-
-    // ---------- Lights ----------
-    const sunLight = new THREE.DirectionalLight(0xffffff, 4.0);
-    sunLight.castShadow = true;
-    sunLight.shadow.mapSize.set(2048, 2048);
-    sunLight.shadow.bias = -0.00025;
-
-    const s = 260;
-    sunLight.shadow.camera.left = -s;
-    sunLight.shadow.camera.right = s;
-    sunLight.shadow.camera.top = s;
-    sunLight.shadow.camera.bottom = -s;
-    sunLight.shadow.camera.near = 1;
-    sunLight.shadow.camera.far = 3500;
-
-    scene.add(sunLight);
-    scene.add(sunLight.target);
-
-    scene.add(new THREE.HemisphereLight(0xbfe9ff, 0x071018, 0.35));
-
     setSun(12, 155);
 
-    // ---------- Simple procedural noise (value noise + fbm) ----------
+    // ----------------- Текстуры (все тут) -----------------
+    const tex = {};
+    tex.canvasGrass = makeGrassTile(512);
+    tex.canvasBark  = makeBarkTile(512);
+    tex.canvasLeaf  = makeLeafTile(512);
+    tex.canvasRock  = makeRockTile(512);
+
+    tex.canvasIconRockTool = makeIconRock(128);
+    tex.canvasIconStone = makeIconStone(128);
+    tex.canvasIconWood  = makeIconWood(128);
+
+    function canvasToTexture(c, repeatX=1, repeatY=1) {
+      const t = new THREE.CanvasTexture(c);
+      t.colorSpace = THREE.SRGBColorSpace;
+      t.wrapS = t.wrapT = THREE.RepeatWrapping;
+      t.repeat.set(repeatX, repeatY);
+      t.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+      t.needsUpdate = true;
+      return t;
+    }
+
+    const grassMap = canvasToTexture(tex.canvasGrass, 20, 20);
+    const barkMap  = canvasToTexture(tex.canvasBark,  1,  4);
+    const leafMap  = canvasToTexture(tex.canvasLeaf,  2,  2);
+    const rockMap  = canvasToTexture(tex.canvasRock,  2,  2);
+
+    // UI icons
+    const icoRockTool = document.getElementById("icoRockTool");
+    const icoStone = document.getElementById("icoStone");
+    const icoWood  = document.getElementById("icoWood");
+    icoRockTool.src = tex.canvasIconRockTool.toDataURL("image/png");
+    icoStone.src    = tex.canvasIconStone.toDataURL("image/png");
+    icoWood.src     = tex.canvasIconWood.toDataURL("image/png");
+
+    // ----------------- Terrain (равнина + гора) -----------------
     function hash2i(ix, iz) {
-      // детерминированный "рандом" 0..1
       let x = ix * 374761393 + iz * 668265263;
       x = (x ^ (x >> 13)) * 1274126177;
       x = (x ^ (x >> 16)) >>> 0;
       return x / 4294967295;
     }
     function fade(t){ return t*t*t*(t*(t*6-15)+10); }
-    function lerp(a,b,t){ return a + (b-a)*t; }
-
-    function noise2D(x, z) {
+    function lerp(a,b,t){ return a+(b-a)*t; }
+    function noise2D(x,z){
       const x0 = Math.floor(x), z0 = Math.floor(z);
-      const x1 = x0 + 1, z1 = z0 + 1;
-
-      const sx = fade(x - x0);
-      const sz = fade(z - z0);
-
-      const n00 = hash2i(x0, z0);
-      const n10 = hash2i(x1, z0);
-      const n01 = hash2i(x0, z1);
-      const n11 = hash2i(x1, z1);
-
-      const ix0 = lerp(n00, n10, sx);
-      const ix1 = lerp(n01, n11, sx);
-      return lerp(ix0, ix1, sz); // 0..1
+      const x1 = x0+1, z1 = z0+1;
+      const sx = fade(x-x0), sz = fade(z-z0);
+      const n00 = hash2i(x0,z0), n10 = hash2i(x1,z0), n01 = hash2i(x0,z1), n11 = hash2i(x1,z1);
+      const ix0 = lerp(n00,n10,sx), ix1 = lerp(n01,n11,sx);
+      return lerp(ix0,ix1,sz);
     }
-
-    function fbm(x, z, octaves = 5) {
-      let value = 0;
-      let amp = 1;
-      let freq = 1;
-      let sumAmp = 0;
-
-      for (let i = 0; i < octaves; i++) {
-        value += (noise2D(x * freq, z * freq) * 2 - 1) * amp;
-        sumAmp += amp;
+    function fbm(x,z,oct=5){
+      let v=0, amp=1, freq=1, sum=0;
+      for(let i=0;i<oct;i++){
+        v += (noise2D(x*freq, z*freq)*2-1)*amp;
+        sum += amp;
         amp *= 0.5;
         freq *= 2.0;
       }
-      return value / sumAmp; // примерно -1..1
+      return v/sum;
     }
-
-    // ---------- Height function (равнина + гора) ----------
-    function heightAt(x, z) {
-      // равнина (мелкие неровности)
-      const plains = fbm(x * 0.008, z * 0.008, 5) * 7.0;
-
-      // гора (гауссов бугор + чуть "скал")
-      const mx = 0, mz = -80;          // центр горы
-      const dx = x - mx, dz = z - mz;
-      const r2 = dx*dx + dz*dz;
-      const sigma = 140;
-      const mountain = Math.exp(-r2 / (2 * sigma * sigma)) * 95.0;
-
-      const rocky = fbm(x * 0.03, z * 0.03, 4) * 6.0 * (mountain / 95.0);
-
+    function heightAt(x,z){
+      const plains = fbm(x*0.008, z*0.008, 5) * 6.0;
+      const mx = 0, mz = -120;
+      const dx = x-mx, dz=z-mz;
+      const r2 = dx*dx+dz*dz;
+      const sigma = 160;
+      const mountain = Math.exp(-r2/(2*sigma*sigma)) * 105.0;
+      const rocky = fbm(x*0.03, z*0.03, 4) * 7.0 * (mountain/105.0);
       return plains + mountain + rocky;
     }
 
-    // ---------- Ground texture (процедурная "трава") ----------
-    function makeGrassTexture(size = 512) {
-      const c = document.createElement("canvas");
-      c.width = c.height = size;
-      const ctx = c.getContext("2d");
-
-      // base
-      ctx.fillStyle = "#2f6d3a";
-      ctx.fillRect(0, 0, size, size);
-
-      // noise speckles
-      const img = ctx.getImageData(0, 0, size, size);
-      const d = img.data;
-      for (let i = 0; i < d.length; i += 4) {
-        const r = Math.random();
-        const g = 110 + Math.floor(r * 70);
-        const rr = 30 + Math.floor(Math.random() * 30);
-        d[i+0] = rr;
-        d[i+1] = g;
-        d[i+2] = 35 + Math.floor(Math.random() * 25);
-        d[i+3] = 255;
-      }
-      ctx.putImageData(img, 0, 0);
-
-      // subtle lines
-      ctx.globalAlpha = 0.16;
-      ctx.fillStyle = "#1f4d2a";
-      for (let i = 0; i < 1400; i++) {
-        const x = Math.random() * size;
-        const y = Math.random() * size;
-        const w = 20 + Math.random() * 70;
-        const h = 1 + Math.random() * 2;
-        ctx.fillRect(x, y, w, h);
-      }
-      ctx.globalAlpha = 1;
-
-      const tex = new THREE.CanvasTexture(c);
-      tex.colorSpace = THREE.SRGBColorSpace;
-      tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-      tex.repeat.set(18, 18);
-      tex.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
-      return tex;
-    }
-
-    // ---------- Terrain mesh ----------
-    const groundSize = 2000;
-    const seg = 240; // качество
+    const groundSize = 2200;
+    const seg = 220;
     const groundGeo = new THREE.PlaneGeometry(groundSize, groundSize, seg, seg);
 
-    // Displace vertices
     {
       const pos = groundGeo.attributes.position;
-      for (let i = 0; i < pos.count; i++) {
+      for (let i=0;i<pos.count;i++){
         const x = pos.getX(i);
-        const z = pos.getY(i); // пока это "Y" в плоскости, после поворота станет Z
-        const h = heightAt(x, z);
-        pos.setZ(i, h);
+        const z = pos.getY(i);         // пока плоскость XY, после поворота станет XZ
+        pos.setZ(i, heightAt(x,z));
       }
       groundGeo.computeVertexNormals();
     }
 
-    const grassMap = makeGrassTexture(512);
-
     const groundMat = new THREE.MeshStandardMaterial({
       map: grassMap,
+      roughness: 1.0,
+      metalness: 0.0
+    });
+
+    const ground = new THREE.Mesh(groundGeo, groundMat);
+    ground.rotation.x = -Math.PI/2;
+    ground.receiveShadow = true;
+    scene.add(ground);
+
+    // ----------------- World: деревья и камни -----------------
+    const interactables = []; // сюда кладём объекты для raycast
+
+    const trunkMat = new THREE.MeshStandardMaterial({
+      map: barkMap,
+      roughness: 1.0,
+      metalness: 0.0,
+      color: 0xffffff
+    });
+    const leafMat = new THREE.MeshStandardMaterial({
+      map: leafMap,
       roughness: 1.0,
       metalness: 0.0,
       color: 0xffffff
     });
 
-    const ground = new THREE.Mesh(groundGeo, groundMat);
-    ground.rotation.x = -Math.PI / 2;
-    ground.receiveShadow = true;
-    scene.add(ground);
+    const rockWorldMat = new THREE.MeshStandardMaterial({
+      map: rockMap,
+      roughness: 1.0,
+      metalness: 0.0,
+      color: 0xffffff
+    });
 
-    // ---------- Character (human-like model with textures) ----------
-    const loader = new GLTFLoader();
+    function addTree(x,z){
+      const y = heightAt(x,z);
+
+      const trunk = new THREE.Mesh(new THREE.CylinderGeometry(2.2, 2.8, 22, 10), trunkMat);
+      trunk.castShadow = true; trunk.receiveShadow = true;
+      trunk.position.set(x, y + 11, z);
+
+      const crown = new THREE.Mesh(new THREE.SphereGeometry(10, 16, 12), leafMat);
+      crown.castShadow = true; crown.receiveShadow = true;
+      crown.position.set(x, y + 26, z);
+
+      const group = new THREE.Group();
+      group.add(trunk, crown);
+      group.userData.type = "tree";
+      group.userData.hp = 6;
+      group.userData.maxHp = 6;
+
+      // важно: для raycast цепляем именно ствол
+      trunk.userData.type = "tree";
+      trunk.userData.parentTree = group;
+
+      scene.add(group);
+      interactables.push(trunk);
+      return group;
+    }
+
+    function addStonePickup(x,z){
+      const y = heightAt(x,z);
+      const m = new THREE.Mesh(new THREE.DodecahedronGeometry(3.2, 0), rockWorldMat);
+      m.castShadow = true; m.receiveShadow = true;
+      m.position.set(x, y + 3.2, z);
+      m.rotation.y = Math.random()*Math.PI*2;
+      m.userData.type = "stonePickup";
+      scene.add(m);
+      interactables.push(m);
+      return m;
+    }
+
+    // генерация мира
+    for (let i=0;i<55;i++){
+      const x = (Math.random()-0.5) * 1200;
+      const z = (Math.random()-0.5) * 1200;
+      // не ставим деревья на вершине горы слишком плотно
+      if (heightAt(x,z) > 85) continue;
+      addTree(x,z);
+    }
+    for (let i=0;i<40;i++){
+      const x = (Math.random()-0.5) * 1000;
+      const z = (Math.random()-0.5) * 1000;
+      if (heightAt(x,z) > 95) continue;
+      addStonePickup(x,z);
+    }
+
+    // ----------------- Character (человек) — текстуры не меняем -----------------
+    // В этом демо персонаж просто стоит рядом (как "главный"), а управление — от первого лица.
     const character = new THREE.Group();
     scene.add(character);
 
+    const gltfLoader = new GLTFLoader();
     let mixer = null;
-    const soldierURL = "https://threejs.org/examples/models/gltf/Soldier.glb";
 
-    loader.load(
-      soldierURL,
-      (gltf) => {
+    gltfLoader.load(
+      "https://threejs.org/examples/models/gltf/Soldier.glb",
+      (gltf)=>{
         const model = gltf.scene;
-        model.traverse((o) => {
-          if (o.isMesh) {
-            o.castShadow = true;
-            o.receiveShadow = true;
-          }
+        model.traverse(o=>{
+          if (o.isMesh){ o.castShadow = true; o.receiveShadow = true; }
         });
-
-        model.scale.setScalar(1.4);
-        model.position.set(0, 0, 0);
+        model.scale.setScalar(1.35);
         character.add(model);
 
-        // animation
+        // Анимация idle
         mixer = new THREE.AnimationMixer(model);
-        const clip = gltf.animations.find(a => /idle/i.test(a.name)) || gltf.animations[0];
+        const clip = gltf.animations.find(a=>/idle/i.test(a.name)) || gltf.animations[0];
         if (clip) mixer.clipAction(clip).play();
+
+        character.position.set(10, heightAt(10,0), 0);
       },
       undefined,
-      (err) => {
-        console.error("Не удалось загрузить Soldier.glb:", err);
-
-        // Fallback: простой "человечек" если GLB не грузится
-        const body = new THREE.Mesh(
-          new THREE.CapsuleGeometry(4.5, 10, 8, 16),
-          new THREE.MeshStandardMaterial({ color: 0xdddddd, roughness: 0.8 })
-        );
-        body.castShadow = true;
-        body.position.y = 12;
-
-        const head = new THREE.Mesh(
-          new THREE.SphereGeometry(4, 24, 16),
-          new THREE.MeshStandardMaterial({ color: 0xffd2b0, roughness: 0.9 })
-        );
-        head.castShadow = true;
-        head.position.y = 20.5;
-
-        character.add(body, head);
-      }
+      (e)=>console.error("Soldier.glb не загрузился:", e)
     );
 
-    // начальная позиция персонажа
-    character.position.set(0, 0, 0);
-    character.position.y = heightAt(character.position.x, character.position.z);
+    // ----------------- FPS controls (pointer lock) -----------------
+    const player = {
+      pos: new THREE.Vector3(0, 0, 160),
+      yaw: 0,
+      pitch: 0,
+      eye: 16,
+      speedWalk: 65,
+      speedRun: 105
+    };
+    player.pos.y = heightAt(player.pos.x, player.pos.z) + player.eye;
+    camera.position.copy(player.pos);
 
-    // ---------- Movement (WASD) ----------
     const keys = new Set();
-    addEventListener("keydown", (e) => keys.add(e.code));
-    addEventListener("keyup", (e) => keys.delete(e.code));
+    addEventListener("keydown", (e)=> keys.add(e.code));
+    addEventListener("keyup", (e)=> keys.delete(e.code));
 
-    const tmpDir = new THREE.Vector3();
-    const qTarget = new THREE.Quaternion();
-    const up = new THREE.Vector3(0, 1, 0);
+    let pointerLocked = false;
+    function lockPointer(){
+      renderer.domElement.requestPointerLock();
+    }
+    document.addEventListener("pointerlockchange", ()=>{
+      pointerLocked = (document.pointerLockElement === renderer.domElement);
+    });
+    renderer.domElement.addEventListener("click", ()=> lockPointer());
 
-    function updateCharacter(dt) {
-      const speed = 55; // units/sec
-      let x = 0, z = 0;
-      if (keys.has("KeyW")) z -= 1;
-      if (keys.has("KeyS")) z += 1;
-      if (keys.has("KeyA")) x -= 1;
-      if (keys.has("KeyD")) x += 1;
+    addEventListener("mousemove", (e)=>{
+      if (!pointerLocked) return;
+      const sens = 0.0022;
+      player.yaw   -= e.movementX * sens;
+      player.pitch -= e.movementY * sens;
+      player.pitch = THREE.MathUtils.clamp(player.pitch, -1.25, 1.25);
+    });
 
-      if (x !== 0 || z !== 0) {
-        tmpDir.set(x, 0, z).normalize();
-
-        // движение в мировых координатах (можно привязать к камере — скажи, если нужно)
-        character.position.addScaledVector(tmpDir, speed * dt);
-
-        // поворот лицом по направлению движения
-        const yaw = Math.atan2(tmpDir.x, tmpDir.z);
-        qTarget.setFromAxisAngle(up, yaw);
-        character.quaternion.slerp(qTarget, 1 - Math.pow(0.0005, dt)); // сглаживание
-      }
-
-      // "прилипание" к земле
-      character.position.y = heightAt(character.position.x, character.position.z);
+    function forwardVector(){
+      const f = new THREE.Vector3(0,0,-1);
+      const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(player.pitch, player.yaw, 0, "YXZ"));
+      return f.applyQuaternion(q).normalize();
+    }
+    function rightVector(){
+      const r = new THREE.Vector3(1,0,0);
+      const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, player.yaw, 0, "YXZ"));
+      return r.applyQuaternion(q).normalize();
     }
 
-    // ---------- Render loop ----------
-    const clock = new THREE.Clock();
+    // ----------------- Inventory / UI -----------------
+    const inv = { stone: 0, wood: 0 };
+    const stoneCountEl = document.getElementById("stoneCount");
+    const woodCountEl = document.getElementById("woodCount");
+    const promptEl = document.getElementById("prompt");
 
-    function animate() {
+    function updateUI(){
+      stoneCountEl.textContent = inv.stone;
+      woodCountEl.textContent = inv.wood;
+    }
+    updateUI();
+
+    // ----------------- Interaction: raycast -----------------
+    const raycaster = new THREE.Raycaster();
+    const center = new THREE.Vector2(0,0);
+    let target = null; // { obj, type, dist, treeGroup? }
+    const interactDist = 34;
+
+    function updateTarget(){
+      raycaster.setFromCamera(center, camera);
+      const hits = raycaster.intersectObjects(interactables, false);
+      target = null;
+
+      if (hits.length){
+        const h = hits[0];
+        if (h.distance <= interactDist){
+          const obj = h.object;
+          const type = obj.userData.type;
+          if (type === "stonePickup"){
+            target = { obj, type, dist: h.distance };
+          } else if (type === "tree"){
+            target = { obj, type, dist: h.distance, tree: obj.userData.parentTree };
+          }
+        }
+      }
+
+      if (!target){
+        promptEl.style.display = "none";
+        return;
+      }
+
+      if (target.type === "stonePickup"){
+        promptEl.textContent = "E — поднять камень (+1 Stone)";
+        promptEl.style.display = "block";
+      }
+      if (target.type === "tree"){
+        const hp = target.tree.userData.hp;
+        promptEl.textContent = `ЛКМ — рубить дерево (HP: ${hp})`;
+        promptEl.style.display = "block";
+      }
+    }
+
+    // pickup on E
+    addEventListener("keydown", (e)=>{
+      if (e.code !== "KeyE") return;
+      if (!target) return;
+
+      if (target.type === "stonePickup"){
+        scene.remove(target.obj);
+        const idx = interactables.indexOf(target.obj);
+        if (idx>=0) interactables.splice(idx,1);
+        inv.stone += 1;
+        updateUI();
+        target = null;
+        promptEl.style.display = "none";
+      }
+    });
+
+    // chop on LMB
+    let hitCooldown = 0;
+    addEventListener("mousedown", (e)=>{
+      if (e.button !== 0) return; // LMB
+      if (!target || target.type !== "tree") return;
+      if (hitCooldown > 0) return;
+
+      // удар камнем
+      const tree = target.tree;
+      tree.userData.hp -= 1;
+      hitCooldown = 0.18;
+
+      // маленькая вспышка/щепки (очень простая)
+      const p = new THREE.Mesh(
+        new THREE.SphereGeometry(0.35, 10, 8),
+        new THREE.MeshStandardMaterial({ color: 0xffe2a8, emissive: 0x442200, emissiveIntensity: 0.6 })
+      );
+      p.position.copy(target.obj.position).add(new THREE.Vector3((Math.random()-0.5)*1.5, 2+Math.random()*1.2, (Math.random()-0.5)*1.5));
+      p.castShadow = false;
+      scene.add(p);
+      setTimeout(()=> scene.remove(p), 120);
+
+      if (tree.userData.hp <= 0){
+        // удалить дерево
+        tree.traverse(o=>{
+          if (o.isMesh){
+            const idx = interactables.indexOf(o);
+            if (idx>=0) interactables.splice(idx,1);
+          }
+        });
+        scene.remove(tree);
+
+        // лут
+        inv.wood += 20;
+        updateUI();
+        target = null;
+        promptEl.style.display = "none";
+      }
+    });
+
+    // ----------------- Download textures button -----------------
+    function downloadCanvasPNG(canvas, name){
+      const a = document.createElement("a");
+      a.href = canvas.toDataURL("image/png");
+      a.download = name;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    }
+    document.getElementById("btnDownload").addEventListener("click", ()=>{
+      downloadCanvasPNG(tex.canvasGrass, "grass_tile.png");
+      downloadCanvasPNG(tex.canvasBark,  "bark_tile.png");
+      downloadCanvasPNG(tex.canvasLeaf,  "leaf_tile.png");
+      downloadCanvasPNG(tex.canvasRock,  "rock_tile.png");
+      downloadCanvasPNG(tex.canvasIconRockTool, "icon_rock_tool.png");
+      downloadCanvasPNG(tex.canvasIconStone, "icon_stone.png");
+      downloadCanvasPNG(tex.canvasIconWood,  "icon_wood.png");
+    });
+
+    // ----------------- Loop -----------------
+    const clock = new THREE.Clock();
+    function animate(){
       requestAnimationFrame(animate);
       const dt = Math.min(clock.getDelta(), 0.033);
 
       if (mixer) mixer.update(dt);
-      updateCharacter(dt);
+      hitCooldown = Math.max(0, hitCooldown - dt);
 
-      // камера чуть следит за персонажем (мягко через target)
-      controls.target.lerp(
-        new THREE.Vector3(character.position.x, character.position.y + 16, character.position.z),
-        1 - Math.pow(0.001, dt)
-      );
-      controls.update();
+      // movement
+      let mx=0, mz=0;
+      if (keys.has("KeyW")) mz -= 1;
+      if (keys.has("KeyS")) mz += 1;
+      if (keys.has("KeyA")) mx -= 1;
+      if (keys.has("KeyD")) mx += 1;
+
+      const running = keys.has("ShiftLeft") || keys.has("ShiftRight");
+      const speed = running ? player.speedRun : player.speedWalk;
+
+      if (mx !== 0 || mz !== 0){
+        const f = forwardVector(); f.y = 0; f.normalize();
+        const r = rightVector();   r.y = 0; r.normalize();
+        const dir = new THREE.Vector3().addScaledVector(r, mx).addScaledVector(f, mz).normalize();
+        player.pos.addScaledVector(dir, speed * dt);
+      }
+
+      // keep above ground
+      const gy = heightAt(player.pos.x, player.pos.z);
+      player.pos.y = gy + player.eye;
+
+      // apply camera rotation
+      camera.position.copy(player.pos);
+      camera.rotation.set(player.pitch, player.yaw, 0, "YXZ");
+
+      updateTarget();
 
       renderer.render(scene, camera);
     }
     animate();
 
-    // ---------- Resize ----------
-    addEventListener("resize", () => {
-      camera.aspect = innerWidth / innerHeight;
+    addEventListener("resize", ()=>{
+      camera.aspect = innerWidth/innerHeight;
       camera.updateProjectionMatrix();
       renderer.setSize(innerWidth, innerHeight);
       renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
