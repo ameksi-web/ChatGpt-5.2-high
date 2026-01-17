@@ -3,103 +3,109 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Rust-like (FPS) — Inventory/Craft/Harvest</title>
+  <title>Rust-like (FPS)</title>
   <link rel="icon" href="data:,">
+
   <style>
     html, body { height:100%; margin:0; overflow:hidden; background:#000; }
     canvas { display:block; }
 
-    /* HUD (минимально, в стиле Rust-подобных выживалок) */
-    #hud { position:fixed; inset:0; pointer-events:none; font: 14px/1.2 system-ui,-apple-system,Segoe UI,Roboto,Arial; color:rgba(255,255,255,.92); }
-    #crosshair {
-      position: fixed; left: 50%; top: 50%;
-      width: 18px; height: 18px; transform: translate(-50%, -50%);
-      opacity: .85;
+    #hud{ position:fixed; inset:0; pointer-events:none; font: 14px/1.2 system-ui,-apple-system,Segoe UI,Roboto,Arial; color:rgba(255,255,255,.92); }
+    #crosshair{
+      position:fixed; left:50%; top:50%;
+      width:18px; height:18px; transform:translate(-50%,-50%);
+      opacity:.85;
     }
-    #crosshair:before, #crosshair:after{
+    #crosshair:before,#crosshair:after{
       content:""; position:absolute; left:50%; top:50%;
-      transform: translate(-50%, -50%);
-      background: rgba(255,255,255,.9);
-      border-radius: 2px;
+      transform:translate(-50%,-50%);
+      background:rgba(255,255,255,.92);
+      border-radius:2px;
     }
     #crosshair:before{ width:2px; height:18px; }
     #crosshair:after { width:18px; height:2px; }
 
-    #prompt {
-      position: fixed; left: 50%; top: calc(50% + 34px);
-      transform: translateX(-50%);
-      padding: 7px 10px;
-      border-radius: 10px;
-      background: rgba(0,0,0,.35);
-      border: 1px solid rgba(255,255,255,.10);
+    #prompt{
+      position:fixed; left:50%; top:calc(50% + 34px);
+      transform:translateX(-50%);
+      padding:7px 10px;
+      border-radius:10px;
+      background:rgba(0,0,0,.35);
+      border:1px solid rgba(255,255,255,.10);
       backdrop-filter: blur(6px);
       display:none;
       white-space:nowrap;
     }
 
-    #hitX {
-      position: fixed;
-      width: 28px; height: 28px;
-      transform: translate(-50%, -50%);
+    #marker{
+      position:fixed;
+      width:28px; height:28px;
+      transform:translate(-50%,-50%);
       display:none;
       pointer-events:none;
-      opacity:.95;
+      opacity:.96;
       filter: drop-shadow(0 2px 4px rgba(0,0,0,.55));
     }
-    #hitX:before, #hitX:after{
+    #marker:before,#marker:after{
       content:""; position:absolute; left:50%; top:50%;
-      width: 26px; height: 3px;
+      width:26px; height:3px;
       background: rgba(255, 70, 70, .95);
-      border-radius: 3px;
-      transform-origin: center;
+      border-radius:3px;
+      transform-origin:center;
     }
-    #hitX:before{ transform: translate(-50%,-50%) rotate(45deg); }
-    #hitX:after { transform: translate(-50%,-50%) rotate(-45deg); }
+    #marker:before{ transform:translate(-50%,-50%) rotate(45deg); }
+    #marker:after { transform:translate(-50%,-50%) rotate(-45deg); }
 
-    #resources {
-      position: fixed; right: 12px; top: 12px;
-      background: rgba(0,0,0,.35);
-      border: 1px solid rgba(255,255,255,.08);
-      border-radius: 12px;
-      padding: 10px 12px;
+    #toast{
+      position:fixed; left:50%; top:14px;
+      transform:translateX(-50%);
+      padding:8px 10px;
+      border-radius:12px;
+      background:rgba(0,0,0,.28);
+      border:1px solid rgba(255,255,255,.08);
+      backdrop-filter: blur(8px);
+      opacity:0;
+      transition: opacity .15s ease;
+      pointer-events:none;
+      white-space:nowrap;
+    }
+
+    #resources{
+      position:fixed; right:12px; top:12px;
+      background:rgba(0,0,0,.35);
+      border:1px solid rgba(255,255,255,.08);
+      border-radius:12px;
+      padding:10px 12px;
       backdrop-filter: blur(6px);
-      min-width: 150px;
+      min-width:160px;
     }
     .resRow{ display:flex; align-items:center; gap:10px; margin:6px 0; }
-    .resRow img{ width:22px; height:22px; border-radius: 6px; }
-    .resRow span{ opacity:.95; }
+    .resRow img{ width:22px; height:22px; border-radius:6px; }
+    .resRow span{ opacity:.95; letter-spacing:.04em; }
 
     #hotbar{
-      position: fixed; left:50%; bottom:16px;
-      transform: translateX(-50%);
+      position:fixed; left:50%; bottom:16px;
+      transform:translateX(-50%);
       display:flex; gap:8px;
       pointer-events:none;
     }
     .slot{
-      width: 62px; height: 62px;
-      border-radius: 14px;
-      background: rgba(0,0,0,.35);
-      border: 1px solid rgba(255,255,255,.10);
+      width:62px; height:62px;
+      border-radius:14px;
+      background:rgba(0,0,0,.35);
+      border:1px solid rgba(255,255,255,.10);
       backdrop-filter: blur(6px);
-      position:relative;
-      overflow:hidden;
+      position:relative; overflow:hidden;
     }
     .slot.active{ outline: 2px solid rgba(255,255,255,.35); }
-    .slot img{
-      width: 46px; height: 46px;
-      position:absolute; left:8px; top:8px;
-    }
-    .slot .count{
-      position:absolute; right:7px; bottom:6px;
-      font-size:12px;
-      text-shadow: 0 1px 2px rgba(0,0,0,.65);
-      opacity:.95;
-    }
+    .slot img{ width:46px; height:46px; position:absolute; left:8px; top:8px; }
+    .slot .k{ position:absolute; left:8px; bottom:6px; font-size:12px; opacity:.8; }
+    .slot .count{ position:absolute; right:7px; bottom:6px; font-size:12px; opacity:.95; text-shadow: 0 1px 2px rgba(0,0,0,.65); }
 
-    /* Inventory overlay (Tab) */
+    /* Inventory */
     #invOverlay{
       position:fixed; inset:0;
-      background: rgba(0,0,0,.55);
+      background: rgba(0,0,0,.62);
       backdrop-filter: blur(10px);
       display:none;
       pointer-events:auto;
@@ -108,75 +114,62 @@
     }
     #invPanel{
       position:absolute; left:50%; top:50%;
-      transform: translate(-50%, -50%);
-      width: min(1100px, calc(100vw - 30px));
-      height: min(640px, calc(100vh - 30px));
+      transform: translate(-50%,-50%);
+      width: min(1120px, calc(100vw - 30px));
+      height: min(660px, calc(100vh - 30px));
       display:grid;
-      grid-template-columns: 1fr 340px;
+      grid-template-columns: 1fr 360px;
       gap: 14px;
     }
     .panelBox{
-      border-radius: 16px;
-      border: 1px solid rgba(255,255,255,.08);
+      border-radius:16px;
+      border:1px solid rgba(255,255,255,.08);
       background: rgba(0,0,0,.35);
       box-shadow: 0 10px 40px rgba(0,0,0,.35);
       overflow:hidden;
     }
-    #invGridWrap{ padding: 14px; }
+    #invGridWrap{ padding:14px; }
     #invGrid{
       display:grid;
       grid-template-columns: repeat(6, 1fr);
-      gap: 10px;
-      height: 100%;
+      gap:10px;
       align-content:start;
     }
     .invSlot{
       aspect-ratio: 1 / 1;
-      border-radius: 14px;
-      border: 1px solid rgba(255,255,255,.10);
+      border-radius:14px;
+      border:1px solid rgba(255,255,255,.10);
       background: rgba(255,255,255,.04);
       position:relative;
       overflow:hidden;
-      cursor: default;
       user-select:none;
     }
-    .invSlot img{
-      position:absolute; left: 12%; top: 12%;
-      width: 76%; height: 76%;
-      opacity: .98;
-    }
-    .invSlot .n{
-      position:absolute; right:10px; bottom:8px;
-      font-size: 12px;
-      opacity:.95;
-      text-shadow: 0 1px 2px rgba(0,0,0,.65);
-    }
-    #craftWrap{ padding: 14px; display:flex; flex-direction:column; gap: 12px; }
-    .craftTitle{ font-weight: 650; letter-spacing: .08em; opacity:.9; }
+    .invSlot img{ position:absolute; left:12%; top:12%; width:76%; height:76%; opacity:.98; }
+    .invSlot .n{ position:absolute; right:10px; bottom:8px; font-size:12px; opacity:.95; text-shadow: 0 1px 2px rgba(0,0,0,.65); }
+
+    #craftWrap{ padding:14px; display:flex; flex-direction:column; gap:12px; }
+    .craftTitle{ font-weight:650; letter-spacing:.12em; opacity:.9; }
     .craftCard{
-      border-radius: 14px;
-      border: 1px solid rgba(255,255,255,.10);
+      border-radius:14px;
+      border:1px solid rgba(255,255,255,.10);
       background: rgba(255,255,255,.04);
-      padding: 12px;
-      display:flex;
-      gap: 12px;
-      align-items:center;
+      padding:12px;
+      display:flex; gap:12px; align-items:center;
     }
-    .craftCard img{ width: 54px; height: 54px; border-radius: 14px; background: rgba(0,0,0,.25); }
+    .craftCard img{ width:54px; height:54px; border-radius:14px; background: rgba(0,0,0,.25); }
     .craftCard .meta{ flex:1; }
-    .craftCard .meta .name{ font-weight: 650; }
-    .craftCard .meta .req{ opacity:.85; font-size: 12px; margin-top: 4px; }
+    .craftCard .meta .name{ font-weight:650; letter-spacing:.06em; }
+    .craftCard .meta .req{ opacity:.82; font-size:12px; margin-top:4px; letter-spacing:.06em; }
     .craftCard button{
       cursor:pointer;
-      border: 1px solid rgba(255,255,255,.12);
+      border:1px solid rgba(255,255,255,.12);
       background: rgba(255,255,255,.08);
       color: rgba(255,255,255,.95);
-      border-radius: 12px;
-      padding: 10px 12px;
+      border-radius:12px;
+      padding:10px 12px;
+      letter-spacing:.08em;
     }
-    .craftCard button:disabled{
-      opacity: .35; cursor:not-allowed;
-    }
+    .craftCard button:disabled{ opacity:.35; cursor:not-allowed; }
   </style>
 
   <script type="importmap">
@@ -193,40 +186,29 @@
   <div id="hud">
     <div id="resources">
       <div class="resRow"><img id="icoStone" alt=""><span>STONE: <b id="stoneCount">0</b></span></div>
-      <div class="resRow"><img id="icoWood"  alt=""><span>WOOD: <b id="woodCount">0</b></span></div>
+      <div class="resRow"><img id="icoWood" alt=""><span>WOOD: <b id="woodCount">0</b></span></div>
     </div>
 
+    <div id="toast"></div>
     <div id="crosshair"></div>
-    <div id="hitX"></div>
+    <div id="marker"></div>
     <div id="prompt"></div>
 
     <div id="hotbar">
-      <div class="slot active" id="hb1"><img id="icoRockTool" alt=""><div class="count">1</div></div>
-      <div class="slot" id="hb2"><img id="icoAxe" alt=""><div class="count">2</div></div>
-      <div class="slot"></div><div class="slot"></div><div class="slot"></div><div class="slot"></div>
+      <div class="slot active" id="hb1"><img id="icoRockTool" alt=""><div class="k">1</div><div class="count"></div></div>
+      <div class="slot" id="hb2"><img id="icoAxe" alt=""><div class="k">2</div><div class="count"></div></div>
+      <div class="slot" id="hb3"><img id="icoPick" alt=""><div class="k">3</div><div class="count"></div></div>
+      <div class="slot" id="hb4"><img id="icoSpear" alt=""><div class="k">4</div><div class="count"></div></div>
+      <div class="slot"></div><div class="slot"></div>
     </div>
   </div>
 
   <div id="invOverlay">
     <div id="invPanel">
-      <div class="panelBox" id="invGridWrap">
-        <div id="invGrid"></div>
-      </div>
+      <div class="panelBox" id="invGridWrap"><div id="invGrid"></div></div>
       <div class="panelBox" id="craftWrap">
         <div class="craftTitle">CRAFT</div>
-
-        <div class="craftCard">
-          <img id="craftAxeIcon" alt="">
-          <div class="meta">
-            <div class="name">STONE AXE</div>
-            <div class="req" id="craftAxeReq">REQ: 30 WOOD, 15 STONE</div>
-          </div>
-          <button id="craftAxeBtn">CRAFT</button>
-        </div>
-
-        <div style="opacity:.75; font-size:12px; margin-top:auto;">
-          Tab — close
-        </div>
+        <div id="craftList"></div>
       </div>
     </div>
   </div>
@@ -235,15 +217,29 @@
   import * as THREE from "three";
   import { Sky } from "three/addons/objects/Sky.js";
 
-  // ---------------- Save / Load ----------------
-  const SAVE_KEY = "rustlike_save_v3";
+  // ---- roundRect polyfill (for older browsers) ----
+  if (!CanvasRenderingContext2D.prototype.roundRect) {
+    CanvasRenderingContext2D.prototype.roundRect = function(x,y,w,h,r){
+      r = Math.min(r, w/2, h/2);
+      this.beginPath();
+      this.moveTo(x+r, y);
+      this.arcTo(x+w, y, x+w, y+h, r);
+      this.arcTo(x+w, y+h, x, y+h, r);
+      this.arcTo(x, y+h, x, y, r);
+      this.arcTo(x, y, x+w, y, r);
+      this.closePath();
+      return this;
+    };
+  }
 
+  // ---------------- Save ----------------
+  const SAVE_KEY = "rustlike_save_v6";
   const saveState = {
     seed: null,
     player: { x: 0, y: 0, z: 0, yaw: 0, pitch: 0 },
-    inv: { wood: 0, stone: 0, hasAxe: false },
+    inv: { wood: 0, stone: 0, hasAxe: false, hasPick: false, hasSpear: false },
     equip: { slot: 1 },
-    removed: { trees: [], stones: [] }
+    removed: { trees: [], ores: [], stones: [] }
   };
 
   function loadSave(){
@@ -253,23 +249,24 @@
       const s = JSON.parse(raw);
       if (!s || !s.inv || !s.player) return false;
       Object.assign(saveState, s);
-      saveState.removed ??= { trees: [], stones: [] };
+      saveState.removed ??= { trees: [], ores: [], stones: [] };
       saveState.removed.trees ??= [];
+      saveState.removed.ores ??= [];
       saveState.removed.stones ??= [];
       return true;
     } catch { return false; }
   }
   function writeSave(){
-    try{
-      localStorage.setItem(SAVE_KEY, JSON.stringify(saveState));
-    } catch {}
+    try{ localStorage.setItem(SAVE_KEY, JSON.stringify(saveState)); } catch {}
   }
 
-  // ---------------- Deterministic RNG ----------------
+  const hasSave = loadSave();
+  if (!hasSave) saveState.seed = (Math.random()*1e9)|0;
+
+  // ---------------- RNG ----------------
   function makeRNG(seed){
     let s = seed >>> 0;
     return () => {
-      // xorshift32
       s ^= s << 13; s >>>= 0;
       s ^= s >> 17; s >>>= 0;
       s ^= s << 5;  s >>>= 0;
@@ -277,96 +274,88 @@
     };
   }
 
-  // ---------------- Texture generation (albedo + normal) ----------------
+  // ---------------- Textures (procedural, "better") ----------------
   function makeCanvas(size=512){
     const c = document.createElement("canvas");
     c.width = c.height = size;
     return c;
   }
+  function clamp255(v){ return Math.max(0, Math.min(255, v|0)); }
   function hexToRgb(hex){
     const h = hex.replace("#","");
     const n = parseInt(h,16);
     return { r:(n>>16)&255, g:(n>>8)&255, b:n&255 };
   }
-  function clamp255(v){ return Math.max(0, Math.min(255, v|0)); }
 
-  function makeNoiseHeight(size, rng, oct=5){
-    // value noise-ish fbm on grid (cheap)
-    const h = new Float32Array(size*size);
+  function makeNoiseHeight(size, rng, oct=6){
     const base = new Float32Array(size*size);
     for (let i=0;i<base.length;i++) base[i] = rng();
+    const H = new Float32Array(size*size);
 
-    function at(x,y){ return base[((y& (size-1))*size + (x&(size-1)))]; }
-    function fade(t){ return t*t*(3-2*t); }
-    function lerp(a,b,t){ return a+(b-a)*t; }
+    const fade = (t)=> t*t*(3-2*t);
+    const lerp = (a,b,t)=> a+(b-a)*t;
+    const at = (x,y)=> base[((y&(size-1))*size + (x&(size-1)))];
 
-    function noise(x,y){
+    const noise = (x,y)=>{
       const x0 = Math.floor(x), y0 = Math.floor(y);
-      const xf = x - x0, yf = y - y0;
-      const v00 = at(x0,y0), v10=at(x0+1,y0), v01=at(x0,y0+1), v11=at(x0+1,y0+1);
+      const xf = x-x0, yf = y-y0;
+      const v00=at(x0,y0), v10=at(x0+1,y0), v01=at(x0,y0+1), v11=at(x0+1,y0+1);
       const u = fade(xf), v = fade(yf);
       return lerp(lerp(v00,v10,u), lerp(v01,v11,u), v);
-    }
+    };
 
     for (let y=0;y<size;y++){
       for (let x=0;x<size;x++){
         let f=1, a=1, sumA=0, v=0;
         for (let o=0;o<oct;o++){
-          v += (noise(x*f/32, y*f/32)*2-1)*a;
+          v += (noise(x*f/48, y*f/48)*2-1)*a;
           sumA += a;
           a *= 0.5;
           f *= 2.0;
         }
-        h[y*size+x] = v / sumA; // ~[-1..1]
+        H[y*size+x] = v/sumA; // ~[-1..1]
       }
     }
-    return h;
+    return H;
   }
 
-  function makeAlbedoAndNormal({ size=512, base1="#2f6d3a", base2="#1f4e2a", contrast=0.8, normalStrength=2.2, rng }){
-    const cA = makeCanvas(size);
-    const ctxA = cA.getContext("2d");
+  function makePBR({ size=512, base1="#2f6d3a", base2="#1f4e2a", contrast=1.0, normalStrength=2.4, rng }){
+    const cA = makeCanvas(size), ctxA = cA.getContext("2d");
+    const cN = makeCanvas(size), ctxN = cN.getContext("2d");
     const imgA = ctxA.createImageData(size,size);
-
-    const cN = makeCanvas(size);
-    const ctxN = cN.getContext("2d");
     const imgN = ctxN.createImageData(size,size);
 
     const b1 = hexToRgb(base1), b2 = hexToRgb(base2);
-    const H = makeNoiseHeight(size, rng, 6);
-
-    function getH(x,y){ return H[(y*size + x)]; }
+    const H = makeNoiseHeight(size, rng, 7);
+    const getH = (x,y)=> H[y*size+x];
 
     for (let y=0;y<size;y++){
       for (let x=0;x<size;x++){
-        const i = (y*size + x);
+        const i = y*size + x;
         const h = getH(x,y);
-
-        // albedo: mix + speckle
         const t = Math.max(0, Math.min(1, 0.5 + h*0.5*contrast));
-        const r = b1.r*(t) + b2.r*(1-t);
-        const g = b1.g*(t) + b2.g*(1-t);
-        const b = b1.b*(t) + b2.b*(1-t);
+        const rr = b1.r*t + b2.r*(1-t);
+        const gg = b1.g*t + b2.g*(1-t);
+        const bb = b1.b*t + b2.b*(1-t);
 
-        const speck = (rng()-0.5)*28;
-        imgA.data[i*4+0] = clamp255(r + speck);
-        imgA.data[i*4+1] = clamp255(g + speck);
-        imgA.data[i*4+2] = clamp255(b + speck);
+        const speck = (rng()-0.5)*22;
+        imgA.data[i*4+0] = clamp255(rr + speck);
+        imgA.data[i*4+1] = clamp255(gg + speck);
+        imgA.data[i*4+2] = clamp255(bb + speck);
         imgA.data[i*4+3] = 255;
 
-        // normal from height (central diff)
-        const xl = (x-1+size)%size, xr = (x+1)%size;
-        const yu = (y-1+size)%size, yd = (y+1)%size;
+        const xl=(x-1+size)%size, xr=(x+1)%size;
+        const yu=(y-1+size)%size, yd=(y+1)%size;
         const dhx = (getH(xl,y) - getH(xr,y)) * normalStrength;
         const dhy = (getH(x,yu) - getH(x,yd)) * normalStrength;
 
         let nx = dhx, ny = dhy, nz = 1.0;
-        const invLen = 1 / Math.sqrt(nx*nx + ny*ny + nz*nz);
-        nx *= invLen; ny *= invLen; nz *= invLen;
+        const inv = 1/Math.sqrt(nx*nx+ny*ny+nz*nz);
+        nx*=inv; ny*=inv; nz*=inv;
 
-        imgN.data[i*4+0] = clamp255((nx*0.5 + 0.5) * 255);
-        imgN.data[i*4+1] = clamp255((ny*0.5 + 0.5) * 255);
-        imgN.data[i*4+2] = clamp255((nz*0.5 + 0.5) * 255);
+        imgN.data[i*4+0] = clamp255((nx*0.5+0.5)*255);
+        imgN.data[i*4+1] = clamp255((ny*0.5+0.5)*255);
+        imgN.data[i*4+2] = clamp255((nz*0.5+0.5)*255);
         imgN.data[i*4+3] = 255;
       }
     }
@@ -378,17 +367,29 @@
 
   function makeBarkPBR(size, rng){
     const cA = makeCanvas(size), ctxA = cA.getContext("2d");
-    ctxA.fillStyle = "#6b4a2e"; ctxA.fillRect(0,0,size,size);
+    ctxA.fillStyle = "#5c3e26";
+    ctxA.fillRect(0,0,size,size);
 
-    // vertical fibers
+    // fibers
     for (let x=0;x<size;x++){
-      const a = 0.10 + rng()*0.20;
-      const col = 60 + (rng()*60)|0;
-      ctxA.fillStyle = `rgba(${col},${45+(rng()*40|0)},${28+(rng()*30|0)},${a})`;
+      const a = 0.10 + rng()*0.25;
+      const col = 45 + (rng()*80)|0;
+      ctxA.fillStyle = `rgba(${col},${35+(rng()*55|0)},${20+(rng()*45|0)},${a})`;
       ctxA.fillRect(x,0,1,size);
     }
+    // knots
+    ctxA.globalAlpha = 0.22;
+    for (let i=0;i<90;i++){
+      const x = rng()*size, y = rng()*size;
+      ctxA.fillStyle = rng() > 0.5 ? "#2a1b10" : "#7a5432";
+      ctxA.beginPath();
+      ctxA.arc(x,y, 8+rng()*22, 0, Math.PI*2);
+      ctxA.fill();
+    }
+    ctxA.globalAlpha = 1;
+
     // cracks
-    ctxA.strokeStyle = "rgba(10,5,3,.35)";
+    ctxA.strokeStyle = "rgba(10,5,3,.38)";
     ctxA.lineWidth = 2;
     for (let i=0;i<70;i++){
       let x = rng()*size;
@@ -403,96 +404,108 @@
       ctxA.stroke();
     }
 
-    // height from albedo (cheap)
+    // normal from luminance
     const img = ctxA.getImageData(0,0,size,size);
     const H = new Float32Array(size*size);
     for (let i=0;i<H.length;i++){
-      const r = img.data[i*4+0], g = img.data[i*4+1], b = img.data[i*4+2];
-      H[i] = (r+g+b)/765; // 0..1
+      const r=img.data[i*4+0], g=img.data[i*4+1], b=img.data[i*4+2];
+      H[i] = (r+g+b)/765;
     }
-
     const cN = makeCanvas(size), ctxN = cN.getContext("2d");
     const imgN = ctxN.createImageData(size,size);
-    function getH(x,y){ return H[(y*size + x)]; }
+    const getH = (x,y)=> H[y*size+x];
+    const strength = 3.4;
 
-    const strength = 3.2;
     for (let y=0;y<size;y++){
       for (let x=0;x<size;x++){
-        const i = y*size + x;
-        const xl = (x-1+size)%size, xr = (x+1)%size;
-        const yu = (y-1+size)%size, yd = (y+1)%size;
-        const dhx = (getH(xl,y) - getH(xr,y)) * strength;
-        const dhy = (getH(x,yu) - getH(x,yd)) * strength;
+        const i=y*size+x;
+        const xl=(x-1+size)%size, xr=(x+1)%size;
+        const yu=(y-1+size)%size, yd=(y+1)%size;
+        const dhx=(getH(xl,y)-getH(xr,y))*strength;
+        const dhy=(getH(x,yu)-getH(x,yd))*strength;
 
-        let nx = dhx, ny = dhy, nz = 1.0;
-        const invLen = 1/Math.sqrt(nx*nx+ny*ny+nz*nz);
-        nx*=invLen; ny*=invLen; nz*=invLen;
-
-        imgN.data[i*4+0] = clamp255((nx*0.5+0.5)*255);
-        imgN.data[i*4+1] = clamp255((ny*0.5+0.5)*255);
-        imgN.data[i*4+2] = clamp255((nz*0.5+0.5)*255);
-        imgN.data[i*4+3] = 255;
+        let nx=dhx, ny=dhy, nz=1;
+        const inv=1/Math.sqrt(nx*nx+ny*ny+nz*nz);
+        nx*=inv; ny*=inv; nz*=inv;
+        imgN.data[i*4+0]=clamp255((nx*0.5+0.5)*255);
+        imgN.data[i*4+1]=clamp255((ny*0.5+0.5)*255);
+        imgN.data[i*4+2]=clamp255((nz*0.5+0.5)*255);
+        imgN.data[i*4+3]=255;
       }
     }
     ctxN.putImageData(imgN,0,0);
     return { albedoCanvas: cA, normalCanvas: cN };
   }
 
-  function makeIcon(fn, size=128){
-    const c = makeCanvas(size), ctx = c.getContext("2d");
+  function makeIcon(draw, size=128){
+    const c = document.createElement("canvas");
+    c.width = c.height = size;
+    const ctx = c.getContext("2d");
     ctx.clearRect(0,0,size,size);
-    fn(ctx,size);
+    draw(ctx,size);
     return c;
   }
 
-  // icons
   const iconRockTool = makeIcon((ctx,s)=>{
     ctx.fillStyle="#2b2f34";
     ctx.beginPath();
-    ctx.moveTo(25,78); ctx.lineTo(46,30); ctx.lineTo(92,36); ctx.lineTo(106,70); ctx.lineTo(78,104); ctx.lineTo(35,98);
+    ctx.moveTo(26,80); ctx.lineTo(48,28); ctx.lineTo(94,36); ctx.lineTo(108,72); ctx.lineTo(78,106); ctx.lineTo(34,98);
     ctx.closePath(); ctx.fill();
     ctx.fillStyle="rgba(255,255,255,.18)";
-    ctx.beginPath(); ctx.moveTo(46,35); ctx.lineTo(78,39); ctx.lineTo(62,62); ctx.closePath(); ctx.fill();
+    ctx.beginPath(); ctx.moveTo(48,35); ctx.lineTo(80,40); ctx.lineTo(64,64); ctx.closePath(); ctx.fill();
   });
   const iconStone = makeIcon((ctx,s)=>{
-    ctx.fillStyle="#6f7378";
+    ctx.fillStyle="#767c82";
     ctx.beginPath(); ctx.arc(s/2, s*0.58, s*0.30, 0, Math.PI*2); ctx.fill();
     ctx.fillStyle="rgba(255,255,255,.22)";
     ctx.beginPath(); ctx.arc(s*0.42, s*0.46, s*0.12, 0, Math.PI*2); ctx.fill();
   });
   const iconWood = makeIcon((ctx,s)=>{
     ctx.fillStyle="#7a4f2a";
-    ctx.roundRect(s*0.20, s*0.28, s*0.60, s*0.46, 18);
-    ctx.fill();
+    ctx.roundRect(s*0.20, s*0.28, s*0.60, s*0.46, 18).fill();
     ctx.fillStyle="rgba(0,0,0,.18)";
     for (let i=0;i<6;i++) ctx.fillRect(s*0.27+i*s*0.09, s*0.31, s*0.03, s*0.40);
     ctx.fillStyle="rgba(255,255,255,.16)";
     ctx.fillRect(s*0.25, s*0.34, s*0.18, s*0.07);
   });
   const iconAxe = makeIcon((ctx,s)=>{
-    // handle
-    ctx.fillStyle="#6b4a2e";
-    ctx.roundRect(s*0.46, s*0.18, s*0.10, s*0.62, 10);
-    ctx.fill();
-    // head
-    ctx.fillStyle="#aeb6bf";
+    ctx.fillStyle="#6b4a2e"; ctx.roundRect(s*0.48, s*0.18, s*0.10, s*0.62, 10).fill();
+    ctx.fillStyle="#b7c0c9";
     ctx.beginPath();
-    ctx.moveTo(s*0.36, s*0.30);
-    ctx.lineTo(s*0.70, s*0.30);
-    ctx.lineTo(s*0.76, s*0.42);
-    ctx.lineTo(s*0.70, s*0.52);
-    ctx.lineTo(s*0.36, s*0.52);
+    ctx.moveTo(s*0.36, s*0.30); ctx.lineTo(s*0.72, s*0.30);
+    ctx.lineTo(s*0.78, s*0.42); ctx.lineTo(s*0.72, s*0.54);
+    ctx.lineTo(s*0.36, s*0.54);
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle="rgba(0,0,0,.16)"; ctx.fillRect(s*0.48, s*0.30, s*0.10, s*0.24);
+  });
+  const iconPick = makeIcon((ctx,s)=>{
+    ctx.fillStyle="#6b4a2e"; ctx.roundRect(s*0.48, s*0.18, s*0.10, s*0.62, 10).fill();
+    ctx.strokeStyle="#b7c0c9"; ctx.lineWidth = 10; ctx.lineCap="round";
+    ctx.beginPath();
+    ctx.moveTo(s*0.30, s*0.34); ctx.lineTo(s*0.70, s*0.34);
+    ctx.stroke();
+    ctx.lineWidth = 8;
+    ctx.beginPath();
+    ctx.moveTo(s*0.32, s*0.34); ctx.lineTo(s*0.24, s*0.46);
+    ctx.moveTo(s*0.68, s*0.34); ctx.lineTo(s*0.76, s*0.46);
+    ctx.stroke();
+  });
+  const iconSpear = makeIcon((ctx,s)=>{
+    ctx.fillStyle="#6b4a2e"; ctx.roundRect(s*0.46, s*0.12, s*0.10, s*0.74, 10).fill();
+    ctx.fillStyle="#c7ced6";
+    ctx.beginPath();
+    ctx.moveTo(s*0.51, s*0.08);
+    ctx.lineTo(s*0.62, s*0.18);
+    ctx.lineTo(s*0.51, s*0.26);
+    ctx.lineTo(s*0.40, s*0.18);
     ctx.closePath();
     ctx.fill();
-    ctx.fillStyle="rgba(0,0,0,.18)";
-    ctx.fillRect(s*0.46, s*0.30, s*0.10, s*0.22);
   });
 
-  // expose “all textures” (без кнопок в GUI): открой DevTools console -> downloadTextures()
-  window.__rustTextures = { iconRockTool, iconStone, iconWood, iconAxe };
+  // Console: download all generated textures (icons + world PBR)
+  window.__rustTextures = { iconRockTool, iconStone, iconWood, iconAxe, iconPick, iconSpear };
   window.downloadTextures = () => {
-    const pack = window.__rustTextures;
-    for (const [k, c] of Object.entries(pack)){
+    for (const [k, c] of Object.entries(window.__rustTextures)){
       if (!c || !c.toDataURL) continue;
       const a = document.createElement("a");
       a.href = c.toDataURL("image/png");
@@ -515,7 +528,7 @@
   document.body.appendChild(renderer.domElement);
 
   const scene = new THREE.Scene();
-  scene.fog = new THREE.FogExp2(0x0b1520, 0.00065);
+  scene.fog = new THREE.FogExp2(0x0b1520, 0.00062);
 
   const camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, 0.08, 12000);
 
@@ -534,7 +547,7 @@
   const pmrem = new THREE.PMREMGenerator(renderer);
   let envRT = null;
 
-  const sunLight = new THREE.DirectionalLight(0xffffff, 4.0);
+  const sunLight = new THREE.DirectionalLight(0xffffff, 4.1);
   sunLight.castShadow = true;
   sunLight.shadow.mapSize.set(2048,2048);
   sunLight.shadow.bias = -0.00025;
@@ -560,25 +573,21 @@
   }
   setSun(12, 155);
 
-  // ---------------- Textures (world) ----------------
-  // init seed
-  const hasSave = loadSave();
-  if (!hasSave) saveState.seed = (Math.random()*1e9)|0;
+  // ---------------- World textures ----------------
   const rngTex = makeRNG((saveState.seed ^ 0xA53A9D) >>> 0);
-
-  const grassPBR = makeAlbedoAndNormal({ size:512, base1:"#2f6d3a", base2:"#1f4e2a", contrast:0.9, normalStrength:2.4, rng: rngTex });
-  const rockPBR  = makeAlbedoAndNormal({ size:512, base1:"#8a8f95", base2:"#555b61", contrast:1.0, normalStrength:3.0, rng: rngTex });
+  const grassPBR = makePBR({ size:512, base1:"#3b7a45", base2:"#214a2a", contrast:1.05, normalStrength:2.5, rng: rngTex });
+  const rockPBR  = makePBR({ size:512, base1:"#9aa0a6", base2:"#50575e", contrast:1.15, normalStrength:3.2, rng: rngTex });
+  const leafPBR  = makePBR({ size:512, base1:"#2e8a55", base2:"#153e25", contrast:1.05, normalStrength:1.25, rng: rngTex });
   const barkPBR  = makeBarkPBR(512, rngTex);
-  const leafPBR  = makeAlbedoAndNormal({ size:512, base1:"#2b7a47", base2:"#184b2d", contrast:0.9, normalStrength:1.2, rng: rngTex });
 
   window.__rustTextures.grass_albedo = grassPBR.albedoCanvas;
   window.__rustTextures.grass_normal = grassPBR.normalCanvas;
   window.__rustTextures.rock_albedo  = rockPBR.albedoCanvas;
   window.__rustTextures.rock_normal  = rockPBR.normalCanvas;
-  window.__rustTextures.bark_albedo  = barkPBR.albedoCanvas;
-  window.__rustTextures.bark_normal  = barkPBR.normalCanvas;
   window.__rustTextures.leaf_albedo  = leafPBR.albedoCanvas;
   window.__rustTextures.leaf_normal  = leafPBR.normalCanvas;
+  window.__rustTextures.bark_albedo  = barkPBR.albedoCanvas;
+  window.__rustTextures.bark_normal  = barkPBR.normalCanvas;
 
   function canvasTex(canvas, repeatX=1, repeatY=1){
     const t = new THREE.CanvasTexture(canvas);
@@ -590,27 +599,29 @@
     return t;
   }
 
-  const texGrass = canvasTex(grassPBR.albedoCanvas, 20, 20);
-  const nrmGrass = canvasTex(grassPBR.normalCanvas, 20, 20);
-  const texRock  = canvasTex(rockPBR.albedoCanvas, 2, 2);
-  const nrmRock  = canvasTex(rockPBR.normalCanvas, 2, 2);
-  const texBark  = canvasTex(barkPBR.albedoCanvas, 1, 4);
-  const nrmBark  = canvasTex(barkPBR.normalCanvas, 1, 4);
+  const texGrass = canvasTex(grassPBR.albedoCanvas, 22, 22);
+  const nrmGrass = canvasTex(grassPBR.normalCanvas, 22, 22);
+  const texRock  = canvasTex(rockPBR.albedoCanvas, 2.5, 2.5);
+  const nrmRock  = canvasTex(rockPBR.normalCanvas, 2.5, 2.5);
   const texLeaf  = canvasTex(leafPBR.albedoCanvas, 2, 2);
   const nrmLeaf  = canvasTex(leafPBR.normalCanvas, 2, 2);
+  const texBark  = canvasTex(barkPBR.albedoCanvas, 1, 4);
+  const nrmBark  = canvasTex(barkPBR.normalCanvas, 1, 4);
 
   // UI icons
   const icoRockToolEl = document.getElementById("icoRockTool");
   const icoStoneEl = document.getElementById("icoStone");
-  const icoWoodEl = document.getElementById("icoWood");
-  const icoAxeEl = document.getElementById("icoAxe");
-  const craftAxeIcon = document.getElementById("craftAxeIcon");
+  const icoWoodEl  = document.getElementById("icoWood");
+  const icoAxeEl   = document.getElementById("icoAxe");
+  const icoPickEl  = document.getElementById("icoPick");
+  const icoSpearEl = document.getElementById("icoSpear");
 
   icoRockToolEl.src = iconRockTool.toDataURL("image/png");
   icoStoneEl.src = iconStone.toDataURL("image/png");
   icoWoodEl.src  = iconWood.toDataURL("image/png");
   icoAxeEl.src   = iconAxe.toDataURL("image/png");
-  craftAxeIcon.src = iconAxe.toDataURL("image/png");
+  icoPickEl.src  = iconPick.toDataURL("image/png");
+  icoSpearEl.src = iconSpear.toDataURL("image/png");
 
   // ---------------- Terrain ----------------
   function hash2i(ix, iz) {
@@ -621,14 +632,18 @@
   }
   function fade(t){ return t*t*t*(t*(t*6-15)+10); }
   function lerp(a,b,t){ return a+(b-a)*t; }
+
   function noise2D(x,z){
     const x0 = Math.floor(x), z0 = Math.floor(z);
     const x1 = x0+1, z1 = z0+1;
     const sx = fade(x-x0), sz = fade(z-z0);
-    // seed into hash by offsetting coords
-    const ox = (saveState.seed % 9973), oz = (saveState.seed % 7963);
+
+    const ox = (saveState.seed % 9973)|0;
+    const oz = (saveState.seed % 7963)|0;
+
     const n00 = hash2i(x0+ox, z0+oz), n10 = hash2i(x1+ox, z0+oz);
     const n01 = hash2i(x0+ox, z1+oz), n11 = hash2i(x1+ox, z1+oz);
+
     const ix0 = lerp(n00,n10,sx), ix1 = lerp(n01,n11,sx);
     return lerp(ix0,ix1,sz);
   }
@@ -644,23 +659,23 @@
   }
   function heightAt(x,z){
     const plains = fbm(x*0.008, z*0.008, 5) * 6.0;
-    const mx = 0, mz = -140;
+    const mx = 0, mz = -150;
     const dx = x-mx, dz=z-mz;
     const r2 = dx*dx+dz*dz;
-    const sigma = 170;
-    const mountain = Math.exp(-r2/(2*sigma*sigma)) * 110.0;
-    const rocky = fbm(x*0.03, z*0.03, 4) * 8.0 * (mountain/110.0);
+    const sigma = 175;
+    const mountain = Math.exp(-r2/(2*sigma*sigma)) * 112.0;
+    const rocky = fbm(x*0.03, z*0.03, 4) * 8.0 * (mountain/112.0);
     return plains + mountain + rocky;
   }
 
-  const groundSize = 2400;
-  const seg = 240;
+  const groundSize = 2600;
+  const seg = 260;
   const groundGeo = new THREE.PlaneGeometry(groundSize, groundSize, seg, seg);
   {
     const pos = groundGeo.attributes.position;
     for (let i=0;i<pos.count;i++){
       const x = pos.getX(i);
-      const z = pos.getY(i); // after rotation becomes Z
+      const z = pos.getY(i);
       pos.setZ(i, heightAt(x,z));
     }
     groundGeo.computeVertexNormals();
@@ -680,62 +695,72 @@
 
   // ---------------- World objects ----------------
   const interactables = [];
-  const trees = new Map();   // id -> group
-  const stones = new Map();  // id -> mesh
-  const removedTrees = new Set(saveState.removed.trees);
-  const removedStones = new Set(saveState.removed.stones);
+  const trees = new Map();
+  const ores = new Map();
+  const stones = new Map();
 
-  const trunkMat = new THREE.MeshStandardMaterial({
-    map: texBark,
-    normalMap: nrmBark,
-    roughness: 1.0,
-    metalness: 0.0
-  });
-  const leafMat = new THREE.MeshStandardMaterial({
-    map: texLeaf,
-    normalMap: nrmLeaf,
-    roughness: 1.0,
-    metalness: 0.0
-  });
-  const rockMat = new THREE.MeshStandardMaterial({
-    map: texRock,
-    normalMap: nrmRock,
-    roughness: 0.95,
-    metalness: 0.0
-  });
+  const removedTrees = new Set(saveState.removed.trees);
+  const removedOres  = new Set(saveState.removed.ores);
+  const removedStones= new Set(saveState.removed.stones);
+
+  const trunkMat = new THREE.MeshStandardMaterial({ map: texBark, normalMap: nrmBark, roughness: 1.0, metalness: 0.0 });
+  const leafMat  = new THREE.MeshStandardMaterial({ map: texLeaf, normalMap: nrmLeaf, roughness: 1.0, metalness: 0.0 });
+  const rockMat  = new THREE.MeshStandardMaterial({ map: texRock, normalMap: nrmRock, roughness: 0.95, metalness: 0.0 });
+
+  function setMarkerRandom(entity){
+    // markerLocal in entity local space (on "main mesh" roughly)
+    const ang = Math.random() * Math.PI*2;
+    const y = 5 + Math.random()*11;
+    const r = 2.55;
+    entity.userData.markerLocal = new THREE.Vector3(Math.cos(ang)*r, y, Math.sin(ang)*r);
+  }
 
   function addTree(id, x, z){
     if (removedTrees.has(id)) return;
     const y = heightAt(x,z);
 
-    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(2.2, 2.8, 22, 12), trunkMat);
+    const trunkH = 22;
+    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(2.2, 2.8, trunkH, 12), trunkMat);
     trunk.castShadow = true; trunk.receiveShadow = true;
-    trunk.position.set(x, y+11, z);
+    trunk.position.set(x, y + trunkH/2 - 0.25, z); // sink a bit so it never floats
 
     const crown = new THREE.Mesh(new THREE.SphereGeometry(10.5, 16, 12), leafMat);
     crown.castShadow = true; crown.receiveShadow = true;
-    crown.position.set(x, y+27, z);
+    crown.position.set(x, y + 27 - 0.25, z);
 
     const g = new THREE.Group();
     g.add(trunk, crown);
-    g.userData = { type:"tree", id, hp: 10, maxHp: 10, x, z, markerLocal: null };
+    g.userData = { type:"tree", id, hp: 14, maxHp: 14, x, z, markerLocal: null };
 
     trunk.userData = { type:"treeTrunk", treeId: id };
 
     scene.add(g);
     interactables.push(trunk);
     trees.set(id, g);
-
-    // initial marker
-    setTreeMarkerRandom(g);
+    setMarkerRandom(g);
   }
 
-  function addStonePickup(id, x, z){
+  function addOreNode(id, x, z){
+    if (removedOres.has(id)) return;
+    const y = heightAt(x,z);
+    const m = new THREE.Mesh(new THREE.IcosahedronGeometry(4.2, 0), rockMat);
+    m.castShadow = true; m.receiveShadow = true;
+    m.position.set(x, y + 4.2 - 0.25, z);
+    m.rotation.y = Math.random()*Math.PI*2;
+    m.userData = { type:"oreNode", id, hp: 16, maxHp: 16, markerLocal: null };
+    scene.add(m);
+    interactables.push(m);
+    ores.set(id, m);
+    // marker on surface
+    m.userData.markerLocal = new THREE.Vector3(0, 1.2, 4.0).applyAxisAngle(new THREE.Vector3(0,1,0), Math.random()*Math.PI*2);
+  }
+
+  function addLooseStone(id, x, z){
     if (removedStones.has(id)) return;
     const y = heightAt(x,z);
-    const m = new THREE.Mesh(new THREE.DodecahedronGeometry(3.2, 0), rockMat);
+    const m = new THREE.Mesh(new THREE.DodecahedronGeometry(2.1, 0), rockMat);
     m.castShadow = true; m.receiveShadow = true;
-    m.position.set(x, y+3.2, z);
+    m.position.set(x, y + 2.1 - 0.15, z);
     m.rotation.y = Math.random()*Math.PI*2;
     m.userData = { type:"stonePickup", id };
     scene.add(m);
@@ -743,36 +768,44 @@
     stones.set(id, m);
   }
 
-  // Generate world with seed (deterministic positions)
+  // world gen deterministic
   const rngWorld = makeRNG((saveState.seed ^ 0x7F19C3) >>> 0);
 
-  const treeCount = 90;
-  for (let i=0;i<treeCount;i++){
-    const x = (rngWorld()-0.5) * 1500;
-    const z = (rngWorld()-0.5) * 1500;
-    if (heightAt(x,z) > 92) continue;
+  // trees
+  for (let i=0;i<120;i++){
+    const x = (rngWorld()-0.5) * 1700;
+    const z = (rngWorld()-0.5) * 1700;
+    if (heightAt(x,z) > 95) continue;
     addTree(`t${i}`, x, z);
   }
 
-  const stoneCount = 70;
-  for (let i=0;i<stoneCount;i++){
-    const x = (rngWorld()-0.5) * 1200;
-    const z = (rngWorld()-0.5) * 1200;
-    if (heightAt(x,z) > 98) continue;
-    addStonePickup(`s${i}`, x, z);
+  // ore nodes
+  for (let i=0;i<90;i++){
+    const x = (rngWorld()-0.5) * 1500;
+    const z = (rngWorld()-0.5) * 1500;
+    if (heightAt(x,z) > 102) continue;
+    addOreNode(`o${i}`, x, z);
   }
 
-  // ---------------- Player (FPS, no inverted mouse, no flying) ----------------
+  // loose stones
+  for (let i=0;i<120;i++){
+    const x = (rngWorld()-0.5) * 1400;
+    const z = (rngWorld()-0.5) * 1400;
+    if (heightAt(x,z) > 110) continue;
+    addLooseStone(`s${i}`, x, z);
+  }
+
+  // ---------------- Player (FPS) ----------------
   const player = {
     pos: new THREE.Vector3(0, 0, 220),
     velY: 0,
     yaw: 0,
     pitch: 0,
-    eye: 16,
-    walk: 68,
-    run: 110,
-    jump: 6.5,
-    gravity: 20
+    eye: 15.5,
+    walk: 75,
+    run: 120,
+    jump: 6.4,
+    gravity: 22
   };
 
   if (hasSave){
@@ -780,21 +813,16 @@
     player.yaw = saveState.player.yaw ?? 0;
     player.pitch = saveState.player.pitch ?? 0;
   }
-
-  // clamp to ground on start
   player.pos.y = Math.max(player.pos.y, heightAt(player.pos.x, player.pos.z) + player.eye);
 
   const keys = new Set();
   addEventListener("keydown", (e)=>{
-    if (e.code === "Tab"){
-      e.preventDefault();
-      toggleInventory();
-      return;
-    }
+    if (e.code === "Tab"){ e.preventDefault(); toggleInventory(); return; }
     keys.add(e.code);
-    // hotbar select
     if (e.code === "Digit1") setEquip(1);
     if (e.code === "Digit2") setEquip(2);
+    if (e.code === "Digit3") setEquip(3);
+    if (e.code === "Digit4") setEquip(4);
   });
   addEventListener("keyup", (e)=> keys.delete(e.code));
 
@@ -802,7 +830,6 @@
   document.addEventListener("pointerlockchange", ()=>{
     pointerLocked = (document.pointerLockElement === renderer.domElement);
   });
-
   renderer.domElement.addEventListener("mousedown", ()=>{
     if (invOpen) return;
     if (!pointerLocked) renderer.domElement.requestPointerLock();
@@ -812,103 +839,213 @@
     if (!pointerLocked || invOpen) return;
     const sens = 0.0022;
     player.yaw   -= e.movementX * sens;
-    // FIX inversion: movementY positive (mouse down) should look down -> pitch positive in three looks down
+    // FIX mouse inversion: mouse up => movementY negative => pitch decreases => look up
     player.pitch += e.movementY * sens;
     player.pitch = THREE.MathUtils.clamp(player.pitch, -1.25, 1.25);
   });
 
   function forwardXZ(){
-    // only yaw affects movement (so you don't "fly" when looking up/down)
+    // yaw=0 => forward -Z
     return new THREE.Vector3(Math.sin(player.yaw), 0, -Math.cos(player.yaw)).normalize();
   }
   function rightXZ(){
     return new THREE.Vector3(Math.cos(player.yaw), 0, Math.sin(player.yaw)).normalize();
   }
 
-  // ---------------- Viewmodel (tool in hands) + swing animation ----------------
-  const viewmodel = new THREE.Group();
-  camera.add(viewmodel);
+  // ---------------- Viewmodel: hands + tool ----------------
+  camera.add(new THREE.PointLight(0xffffff, 0.25, 3.0)); // small eye light
   scene.add(camera);
 
-  const tool = {
-    current: "rock", // rock | axe
-    swing: 0,        // 0..1
-    swinging: false,
-    cooldown: 0
-  };
+  const viewmodel = new THREE.Group();
+  camera.add(viewmodel);
 
+  const skinMat = new THREE.MeshStandardMaterial({ color: 0xf1c7a6, roughness: 0.9, metalness: 0.0 });
+  const sleeveMat = new THREE.MeshStandardMaterial({ color: 0x2a2f35, roughness: 1.0, metalness: 0.0 });
+
+  const arms = new THREE.Group();
+  viewmodel.add(arms);
+
+  function makeArm(isRight){
+    const g = new THREE.Group();
+    const upper = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.11, 0.55, 12), sleeveMat);
+    const fore  = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.10, 0.58, 12), skinMat);
+    const hand  = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.10, 0.18), skinMat);
+
+    upper.position.set(0, -0.15, 0);
+    fore.position.set(0, -0.62, 0.02);
+    hand.position.set(0, -0.95, 0.06);
+
+    upper.castShadow = fore.castShadow = false;
+    upper.receiveShadow = fore.receiveShadow = false;
+
+    g.add(upper, fore, hand);
+    g.position.set(isRight ? 0.25 : -0.22, -0.26, -0.55);
+    g.rotation.set(-0.25, isRight ? 0.25 : -0.18, isRight ? 0.12 : -0.05);
+    return { g, hand };
+  }
+
+  const leftArm = makeArm(false);
+  const rightArm = makeArm(true);
+  arms.add(leftArm.g, rightArm.g);
+
+  const toolHolder = new THREE.Group();
+  rightArm.hand.add(toolHolder);
+  toolHolder.position.set(0.03, -0.05, 0.08);
+  toolHolder.rotation.set(0.15, 0.0, 0.0);
+
+  // tool meshes
   function makeRockToolMesh(){
     const m = new THREE.Mesh(
-      new THREE.DodecahedronGeometry(1.05, 0),
+      new THREE.DodecahedronGeometry(0.11, 0),
       new THREE.MeshStandardMaterial({ map: texRock, normalMap: nrmRock, roughness: 0.95, metalness: 0.0 })
     );
-    m.castShadow = false; m.receiveShadow = false;
     return m;
   }
   function makeAxeMesh(){
     const g = new THREE.Group();
     const handle = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.12, 0.16, 3.2, 10),
+      new THREE.CylinderGeometry(0.018, 0.024, 0.34, 10),
       new THREE.MeshStandardMaterial({ map: texBark, normalMap: nrmBark, roughness: 1.0 })
     );
-    handle.position.set(0, -0.2, 0);
+    handle.position.set(0, -0.02, 0);
     handle.rotation.z = 0.15;
+
     const head = new THREE.Mesh(
-      new THREE.BoxGeometry(1.25, 0.65, 0.35),
+      new THREE.BoxGeometry(0.14, 0.08, 0.05),
       new THREE.MeshStandardMaterial({ color: 0xb9c1c9, roughness: 0.35, metalness: 0.8 })
     );
-    head.position.set(0.65, 1.0, 0);
+    head.position.set(0.08, 0.10, 0);
     head.rotation.z = 0.15;
+
     g.add(handle, head);
     return g;
   }
+  function makePickMesh(){
+    const g = new THREE.Group();
+    const handle = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.018, 0.024, 0.36, 10),
+      new THREE.MeshStandardMaterial({ map: texBark, normalMap: nrmBark, roughness: 1.0 })
+    );
+    handle.position.set(0, -0.02, 0);
+    handle.rotation.z = 0.12;
 
-  const rockToolMesh = makeRockToolMesh();
-  const axeMesh = makeAxeMesh();
+    const bar = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.02, 0.02, 0.22, 10),
+      new THREE.MeshStandardMaterial({ color: 0xb9c1c9, roughness: 0.35, metalness: 0.8 })
+    );
+    bar.position.set(0.0, 0.14, 0);
+    bar.rotation.z = Math.PI/2;
 
-  function setToolVisual(name){
-    viewmodel.clear();
-    if (name === "axe") viewmodel.add(axeMesh);
-    else viewmodel.add(rockToolMesh);
+    const spike1 = new THREE.Mesh(new THREE.ConeGeometry(0.03, 0.09, 10), bar.material);
+    const spike2 = new THREE.Mesh(new THREE.ConeGeometry(0.03, 0.09, 10), bar.material);
+    spike1.position.set(0.11, 0.14, 0);
+    spike2.position.set(-0.11, 0.14, 0);
+    spike1.rotation.z = -Math.PI/2;
+    spike2.rotation.z =  Math.PI/2;
 
-    // base pose near right bottom of screen
-    viewmodel.position.set(0.55, -0.45, -0.9);
-    viewmodel.rotation.set(-0.25, 0.35, 0.15);
-    viewmodel.scale.setScalar(10.5);
+    g.add(handle, bar, spike1, spike2);
+    return g;
+  }
+  function makeSpearMesh(){
+    const g = new THREE.Group();
+    const shaft = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.014, 0.022, 0.62, 10),
+      new THREE.MeshStandardMaterial({ map: texBark, normalMap: nrmBark, roughness: 1.0 })
+    );
+    shaft.position.set(0, 0.0, 0);
+    const tip = new THREE.Mesh(
+      new THREE.ConeGeometry(0.035, 0.12, 12),
+      new THREE.MeshStandardMaterial({ color: 0xb9c1c9, roughness: 0.45, metalness: 0.6 })
+    );
+    tip.position.set(0, 0.34, 0);
+    g.add(shaft, tip);
+    g.rotation.z = -0.2;
+    return g;
   }
 
-  // equip slots:
-  function setEquip(slot){
-    saveState.equip.slot = slot;
-    // slot 1: rock always
-    // slot 2: axe only if crafted
-    if (slot === 2 && !saveState.inv.hasAxe) {
-      saveState.equip.slot = 1;
-    }
-    const hb1 = document.getElementById("hb1");
-    const hb2 = document.getElementById("hb2");
-    hb1.classList.toggle("active", saveState.equip.slot === 1);
-    hb2.classList.toggle("active", saveState.equip.slot === 2);
+  const toolMeshes = {
+    rock: makeRockToolMesh(),
+    axe: makeAxeMesh(),
+    pick: makePickMesh(),
+    spear: makeSpearMesh()
+  };
 
-    tool.current = (saveState.equip.slot === 2) ? "axe" : "rock";
+  // pose
+  viewmodel.position.set(0.55, -0.45, -0.9);
+  viewmodel.rotation.set(0,0,0);
+  viewmodel.scale.setScalar(10.0);
+
+  // ---------------- Items / tools / equip ----------------
+  const hbEls = {
+    1: document.getElementById("hb1"),
+    2: document.getElementById("hb2"),
+    3: document.getElementById("hb3"),
+    4: document.getElementById("hb4")
+  };
+
+  const tool = { current: "rock", swingT: 0, swinging: false, cooldown: 0 };
+
+  function toolStats(){
+    switch (tool.current){
+      case "axe":   return { cd: 0.22, treeDmg: 2, oreDmg: 1, markerBonus: 2, name: "AXE"   };
+      case "pick":  return { cd: 0.24, treeDmg: 1, oreDmg: 2, markerBonus: 2, name: "PICK"  };
+      case "spear": return { cd: 0.30, treeDmg: 1, oreDmg: 1, markerBonus: 1, name: "SPEAR" };
+      default:      return { cd: 0.33, treeDmg: 1, oreDmg: 1, markerBonus: 2, name: "ROCK"  };
+    }
+  }
+
+  function setToolVisual(name){
+    toolHolder.clear();
+    toolHolder.add(toolMeshes[name]);
+    // a bit different grip per tool
+    if (name === "rock") { toolHolder.position.set(0.03, -0.04, 0.10); toolHolder.rotation.set(0.2, 0.3, -0.2); }
+    if (name === "axe")  { toolHolder.position.set(0.04, -0.08, 0.10); toolHolder.rotation.set(0.2, 0.0,  0.5); }
+    if (name === "pick") { toolHolder.position.set(0.04, -0.08, 0.10); toolHolder.rotation.set(0.2, 0.0,  0.45); }
+    if (name === "spear"){ toolHolder.position.set(0.05, -0.10, 0.12); toolHolder.rotation.set(0.0, 0.0,  0.2); }
+  }
+
+  function setEquip(slot){
+    // slot 1 always rock
+    if (slot === 2 && !saveState.inv.hasAxe) slot = 1;
+    if (slot === 3 && !saveState.inv.hasPick) slot = 1;
+    if (slot === 4 && !saveState.inv.hasSpear) slot = 1;
+
+    saveState.equip.slot = slot;
+
+    for (const k of [1,2,3,4]) hbEls[k].classList.toggle("active", k === slot);
+
+    tool.current = (slot === 2) ? "axe" : (slot === 3) ? "pick" : (slot === 4) ? "spear" : "rock";
     setToolVisual(tool.current);
     writeSave();
   }
 
-  // initial equip
   setEquip(saveState.equip.slot || 1);
 
-  function startSwing(){
-    tool.swinging = true;
-    tool.swing = 0;
+  // ---------------- HUD / inventory ----------------
+  const woodCountEl = document.getElementById("woodCount");
+  const stoneCountEl = document.getElementById("stoneCount");
+  const toastEl = document.getElementById("toast");
+  let toastTimer = 0;
+
+  function toast(msg){
+    toastEl.textContent = msg;
+    toastEl.style.opacity = "1";
+    toastTimer = 1.2;
   }
 
-  // ---------------- Inventory UI + Craft ----------------
+  function updateHUD(){
+    woodCountEl.textContent = saveState.inv.wood;
+    stoneCountEl.textContent = saveState.inv.stone;
+    icoAxeEl.style.opacity = saveState.inv.hasAxe ? "1" : "0.15";
+    icoPickEl.style.opacity = saveState.inv.hasPick ? "1" : "0.15";
+    icoSpearEl.style.opacity = saveState.inv.hasSpear ? "1" : "0.15";
+  }
+  updateHUD();
+
+  // inventory overlay
   const invOverlay = document.getElementById("invOverlay");
   const invGrid = document.getElementById("invGrid");
-  const craftAxeBtn = document.getElementById("craftAxeBtn");
-  const craftAxeReq = document.getElementById("craftAxeReq");
-
+  const craftList = document.getElementById("craftList");
   let invOpen = false;
 
   function toggleInventory(){
@@ -917,161 +1054,273 @@
     if (invOpen){
       if (pointerLocked) document.exitPointerLock();
       renderInventory();
+      renderCraft();
     } else {
-      // no auto lock (как в играх — клик для захвата)
       writeSave();
     }
   }
 
-  function canCraftAxe(){
-    return !saveState.inv.hasAxe && saveState.inv.wood >= 30 && saveState.inv.stone >= 15;
-  }
-
-  craftAxeBtn.addEventListener("click", ()=>{
-    if (!invOpen) return;
-    if (!canCraftAxe()) return;
-    saveState.inv.wood -= 30;
-    saveState.inv.stone -= 15;
-    saveState.inv.hasAxe = true;
-    setEquip(2);
-    updateHUD();
-    renderInventory();
-    writeSave();
-  });
-
   function renderInventory(){
     invGrid.innerHTML = "";
-
-    // Build “clean” inventory: show stacks (wood/stone) + axe if have
     const slots = [];
-    // put resources first
     if (saveState.inv.wood > 0) slots.push({ icon: iconWood, n: saveState.inv.wood });
     if (saveState.inv.stone > 0) slots.push({ icon: iconStone, n: saveState.inv.stone });
     if (saveState.inv.hasAxe) slots.push({ icon: iconAxe, n: 1 });
+    if (saveState.inv.hasPick) slots.push({ icon: iconPick, n: 1 });
+    if (saveState.inv.hasSpear) slots.push({ icon: iconSpear, n: 1 });
 
-    const totalSlots = 30;
-    for (let i=0;i<totalSlots;i++){
+    const total = 30;
+    for (let i=0;i<total;i++){
       const s = document.createElement("div");
       s.className = "invSlot";
-
-      if (slots[i]){
+      const it = slots[i];
+      if (it){
         const img = document.createElement("img");
-        img.src = slots[i].icon.toDataURL("image/png");
+        img.src = it.icon.toDataURL("image/png");
         s.appendChild(img);
-
         const n = document.createElement("div");
         n.className = "n";
-        n.textContent = (slots[i].n > 1) ? slots[i].n : "";
+        n.textContent = it.n > 1 ? String(it.n) : "";
         s.appendChild(n);
       }
       invGrid.appendChild(s);
     }
-
-    craftAxeBtn.disabled = !canCraftAxe();
-    craftAxeReq.textContent = "REQ: 30 WOOD, 15 STONE";
   }
 
-  // ---------------- HUD counters ----------------
-  const woodCountEl = document.getElementById("woodCount");
-  const stoneCountEl = document.getElementById("stoneCount");
-  function updateHUD(){
-    woodCountEl.textContent = saveState.inv.wood;
-    stoneCountEl.textContent = saveState.inv.stone;
-    // hide axe icon in hotbar if not crafted
-    icoAxeEl.style.opacity = saveState.inv.hasAxe ? "1" : "0.15";
-  }
-  updateHUD();
+  const recipes = [
+    { key:"axe",   name:"STONE AXE",   icon: iconAxe,  cost:{ wood:30, stone:15 }, owned: ()=>saveState.inv.hasAxe,   give: ()=>{ saveState.inv.hasAxe=true; } },
+    { key:"pick",  name:"STONE PICK",  icon: iconPick, cost:{ wood:30, stone:20 }, owned: ()=>saveState.inv.hasPick,  give: ()=>{ saveState.inv.hasPick=true; } },
+    { key:"spear", name:"WOOD SPEAR",  icon: iconSpear,cost:{ wood:60, stone:0  }, owned: ()=>saveState.inv.hasSpear, give: ()=>{ saveState.inv.hasSpear=true; } }
+  ];
 
-  // ---------------- Interaction: raycast + prompt + Rust-like hit marker ----------------
+  function canCraft(r){
+    if (r.owned()) return false;
+    if (saveState.inv.wood < r.cost.wood) return false;
+    if (saveState.inv.stone < r.cost.stone) return false;
+    return true;
+  }
+
+  function craft(r){
+    if (!canCraft(r)) return;
+    saveState.inv.wood -= r.cost.wood;
+    saveState.inv.stone -= r.cost.stone;
+    r.give();
+    updateHUD();
+    renderInventory();
+    renderCraft();
+    // auto equip crafted item
+    if (r.key === "axe") setEquip(2);
+    if (r.key === "pick") setEquip(3);
+    if (r.key === "spear") setEquip(4);
+    toast(`CRAFTED: ${r.name}`);
+    writeSave();
+  }
+
+  function renderCraft(){
+    craftList.innerHTML = "";
+    for (const r of recipes){
+      const card = document.createElement("div");
+      card.className = "craftCard";
+
+      const img = document.createElement("img");
+      img.src = r.icon.toDataURL("image/png");
+      card.appendChild(img);
+
+      const meta = document.createElement("div");
+      meta.className = "meta";
+      const nm = document.createElement("div");
+      nm.className = "name";
+      nm.textContent = r.name;
+      const req = document.createElement("div");
+      req.className = "req";
+      const reqParts = [];
+      if (r.cost.wood) reqParts.push(`${r.cost.wood} WOOD`);
+      if (r.cost.stone) reqParts.push(`${r.cost.stone} STONE`);
+      req.textContent = `REQ: ${reqParts.join(", ")}`;
+      meta.appendChild(nm);
+      meta.appendChild(req);
+      card.appendChild(meta);
+
+      const btn = document.createElement("button");
+      btn.textContent = r.owned() ? "OWNED" : "CRAFT";
+      btn.disabled = !canCraft(r);
+      btn.addEventListener("click", ()=> craft(r));
+      card.appendChild(btn);
+
+      craftList.appendChild(card);
+    }
+  }
+
+  // ---------------- Interaction / marker ----------------
+  const promptEl = document.getElementById("prompt");
+  const markerEl = document.getElementById("marker");
   const raycaster = new THREE.Raycaster();
   const center = new THREE.Vector2(0,0);
-  const promptEl = document.getElementById("prompt");
-  const hitXEl = document.getElementById("hitX");
 
-  const interactDist = 34;
-  let target = null; // {type, obj, treeId, point, dist}
-  const tmpV = new THREE.Vector3();
-
-  // Tree marker (Rust X)
-  let activeTreeId = null;
-  let activeMarkerWorld = null;
-
-  function setTreeMarkerRandom(treeGroup){
-    // marker on trunk surface near mid height
-    const trunk = treeGroup.children[0];
-    const angle = Math.random() * Math.PI*2;
-    const height = 5 + Math.random()*11;
-    const radius = 2.55;
-    const local = new THREE.Vector3(Math.cos(angle)*radius, height, Math.sin(angle)*radius);
-    treeGroup.userData.markerLocal = local;
-  }
+  const interactDist = 35;
+  let target = null; // { type, id, obj, point, dist, markerWorld? }
 
   function worldToScreen(pos){
     const p = pos.clone().project(camera);
-    return {
-      x: (p.x*0.5 + 0.5) * innerWidth,
-      y: (-p.y*0.5 + 0.5) * innerHeight,
-      on: p.z < 1
-    };
+    return { x: (p.x*0.5+0.5)*innerWidth, y:(-p.y*0.5+0.5)*innerHeight, on: p.z < 1 };
   }
 
   function updateTarget(){
     promptEl.style.display = "none";
-    hitXEl.style.display = "none";
+    markerEl.style.display = "none";
     target = null;
 
     raycaster.setFromCamera(center, camera);
     const hits = raycaster.intersectObjects(interactables, false);
-    if (!hits.length) { activeTreeId = null; return; }
+    if (!hits.length) return;
 
     const h = hits[0];
-    if (h.distance > interactDist) { activeTreeId = null; return; }
+    if (h.distance > interactDist) return;
 
     const obj = h.object;
     const ud = obj.userData;
 
     if (ud.type === "stonePickup"){
-      target = { type:"stonePickup", obj, id: ud.id, point: h.point, dist: h.distance };
+      target = { type:"stonePickup", id: ud.id, obj, point: h.point, dist: h.distance };
       promptEl.textContent = "E  PICK UP";
       promptEl.style.display = "block";
-      activeTreeId = null;
       return;
     }
 
     if (ud.type === "treeTrunk"){
-      const treeId = ud.treeId;
-      const tree = trees.get(treeId);
-      if (!tree) { activeTreeId = null; return; }
+      const tree = trees.get(ud.treeId);
+      if (!tree) return;
 
-      target = { type:"tree", obj, treeId, point: h.point, dist: h.distance };
-
-      // show hit marker X in correct place on trunk
-      activeTreeId = treeId;
-      const local = tree.userData.markerLocal;
-      if (local){
-        activeMarkerWorld = local.clone();
-        tree.localToWorld(activeMarkerWorld);
-
-        const s = worldToScreen(activeMarkerWorld);
+      target = { type:"tree", id: ud.treeId, obj, point: h.point, dist: h.distance };
+      // marker
+      if (tree.userData.markerLocal){
+        const mw = tree.userData.markerLocal.clone();
+        tree.localToWorld(mw);
+        const s = worldToScreen(mw);
         if (s.on){
-          hitXEl.style.left = `${s.x}px`;
-          hitXEl.style.top = `${s.y}px`;
-          hitXEl.style.display = "block";
+          markerEl.style.left = `${s.x}px`;
+          markerEl.style.top = `${s.y}px`;
+          markerEl.style.display = "block";
+          target.markerWorld = mw;
         }
       }
       return;
     }
 
-    activeTreeId = null;
+    if (ud.type === "oreNode"){
+      const ore = ores.get(ud.id);
+      if (!ore) return;
+
+      target = { type:"ore", id: ud.id, obj, point: h.point, dist: h.distance };
+      if (ore.userData.markerLocal){
+        const mw = ore.userData.markerLocal.clone();
+        ore.localToWorld(mw);
+        const s = worldToScreen(mw);
+        if (s.on){
+          markerEl.style.left = `${s.x}px`;
+          markerEl.style.top = `${s.y}px`;
+          markerEl.style.display = "block";
+          target.markerWorld = mw;
+        }
+      }
+      return;
+    }
   }
 
-  // ---------------- Actions: pick up, hit (LMB) ----------------
+  // ---------------- Harvest / swing ----------------
+  function startSwing(){
+    tool.swinging = true;
+    tool.swingT = 0;
+  }
+
+  function applyMarkerBonus(markerWorld, hitPoint, baseDmg, bonusMul){
+    if (!markerWorld) return baseDmg;
+    const dist = markerWorld.distanceTo(hitPoint);
+    return (dist < 2.5) ? (baseDmg * bonusMul) : baseDmg;
+  }
+
+  function moveTreeMarker(tree){
+    setMarkerRandom(tree);
+  }
+  function moveOreMarker(ore){
+    // random surface-ish point
+    const ang = Math.random()*Math.PI*2;
+    ore.userData.markerLocal = new THREE.Vector3(Math.cos(ang)*4.0, (Math.random()-0.2)*1.6, Math.sin(ang)*4.0);
+  }
+
+  function hitTree(treeId, hitPoint){
+    const tree = trees.get(treeId);
+    if (!tree) return;
+    const stats = toolStats();
+    let dmg = stats.treeDmg;
+    dmg = applyMarkerBonus(target?.markerWorld, hitPoint, dmg, stats.markerBonus);
+
+    tree.userData.hp -= dmg;
+    moveTreeMarker(tree);
+
+    // loot per hit (small) + extra on marker hit
+    const got = (dmg >= stats.treeDmg*stats.markerBonus) ? 4 : 2;
+    saveState.inv.wood += got;
+    toast(`+${got} WOOD`);
+    updateHUD();
+
+    if (tree.userData.hp <= 0){
+      // remove
+      const trunk = tree.children[0];
+      const idx = interactables.indexOf(trunk);
+      if (idx >= 0) interactables.splice(idx,1);
+      scene.remove(tree);
+      trees.delete(treeId);
+
+      removedTrees.add(treeId);
+      saveState.removed.trees = Array.from(removedTrees);
+
+      // extra on destroy
+      saveState.inv.wood += 12;
+      toast(`+12 WOOD`);
+      updateHUD();
+    }
+    writeSave();
+  }
+
+  function hitOre(oreId, hitPoint){
+    const ore = ores.get(oreId);
+    if (!ore) return;
+    const stats = toolStats();
+    let dmg = stats.oreDmg;
+    dmg = applyMarkerBonus(target?.markerWorld, hitPoint, dmg, stats.markerBonus);
+
+    ore.userData.hp -= dmg;
+    moveOreMarker(ore);
+
+    const got = (dmg >= stats.oreDmg*stats.markerBonus) ? 4 : 2;
+    saveState.inv.stone += got;
+    toast(`+${got} STONE`);
+    updateHUD();
+
+    if (ore.userData.hp <= 0){
+      const idx = interactables.indexOf(ore);
+      if (idx >= 0) interactables.splice(idx,1);
+      scene.remove(ore);
+      ores.delete(oreId);
+
+      removedOres.add(oreId);
+      saveState.removed.ores = Array.from(removedOres);
+
+      saveState.inv.stone += 10;
+      toast(`+10 STONE`);
+      updateHUD();
+    }
+    writeSave();
+  }
+
+  // pickup (E)
   addEventListener("keydown", (e)=>{
     if (e.code !== "KeyE") return;
-    if (!target || invOpen) return;
+    if (invOpen) return;
+    if (!target) return;
 
     if (target.type === "stonePickup"){
-      // remove stone
       const id = target.id;
       const m = stones.get(id);
       if (m){
@@ -1084,150 +1333,152 @@
       saveState.removed.stones = Array.from(removedStones);
 
       saveState.inv.stone += 1;
+      toast(`+1 STONE`);
       updateHUD();
       writeSave();
     }
   });
 
-  function toolStats(){
-    if (tool.current === "axe") return { dmg: 2, cd: 0.22 };
-    return { dmg: 1, cd: 0.33 };
-  }
-
-  function damageTree(tree, hitPointWorld){
-    const stats = toolStats();
-    let dmg = stats.dmg;
-
-    // bonus if close to marker
-    if (tree.userData.markerLocal){
-      const markerW = tree.userData.markerLocal.clone();
-      tree.localToWorld(markerW);
-      const dist = markerW.distanceTo(hitPointWorld);
-      if (dist < 2.4) dmg *= 2; // “правильный крестик”
-      // move marker after each hit (как в Rust)
-      setTreeMarkerRandom(tree);
-    }
-
-    tree.userData.hp -= dmg;
-
-    if (tree.userData.hp <= 0){
-      // remove tree
-      const trunk = tree.children[0];
-      const idx = interactables.indexOf(trunk);
-      if (idx >= 0) interactables.splice(idx,1);
-      scene.remove(tree);
-      trees.delete(tree.userData.id);
-
-      removedTrees.add(tree.userData.id);
-      saveState.removed.trees = Array.from(removedTrees);
-
-      // loot (просто в инвентарь)
-      saveState.inv.wood += 20;
-      updateHUD();
-      writeSave();
-    }
-  }
-
+  // hit (LMB)
   addEventListener("mousedown", (e)=>{
     if (e.button !== 0) return;
     if (invOpen) return;
-    if (tool.cooldown > 0) return;
     if (!pointerLocked) return;
+    if (tool.cooldown > 0) return;
 
     const stats = toolStats();
     tool.cooldown = stats.cd;
     startSwing();
 
-    if (target?.type === "tree"){
-      const tree = trees.get(target.treeId);
-      if (tree) damageTree(tree, target.point);
-    }
+    if (!target) return;
+    if (target.type === "tree") hitTree(target.id, target.point);
+    if (target.type === "ore")  hitOre(target.id, target.point);
   });
 
-  // ---------------- Loop / Physics ----------------
-  const clock = new THREE.Clock();
+  // ---------------- Movement (FIX: W forward, no "flying") ----------------
+  function updateMovement(dt){
+    if (invOpen) return;
 
-  function tick(){
-    requestAnimationFrame(tick);
-    const dt = Math.min(clock.getDelta(), 0.033);
+    let mx=0, mz=0;
+    // FIX keys: W should move forward (mz + 1), S backward (mz - 1)
+    if (keys.has("KeyW")) mz += 1;
+    if (keys.has("KeyS")) mz -= 1;
+    if (keys.has("KeyA")) mx -= 1;
+    if (keys.has("KeyD")) mx += 1;
 
-    // cooldown + swing anim
-    tool.cooldown = Math.max(0, tool.cooldown - dt);
-    if (tool.swinging){
-      tool.swing += dt * 7.5;
-      if (tool.swing >= 1){
-        tool.swing = 1;
-        tool.swinging = false;
-      }
-      // swing pose
-      const t = tool.swing;
-      const ease = t < 0.5 ? (t*2) : (1 - (t-0.5)*2);
-      viewmodel.rotation.x = -0.25 + ease * 0.95;
-      viewmodel.rotation.y =  0.35 - ease * 0.30;
-      viewmodel.rotation.z =  0.15 - ease * 0.55;
-      viewmodel.position.y = -0.45 - ease * 0.10;
-      viewmodel.position.x =  0.55 + ease * 0.08;
-    } else {
-      // idle pose
-      viewmodel.position.set(0.55, -0.45, -0.9);
-      viewmodel.rotation.set(-0.25, 0.35, 0.15);
+    const running = keys.has("ShiftLeft") || keys.has("ShiftRight");
+    const speed = running ? player.run : player.walk;
+
+    if (mx !== 0 || mz !== 0){
+      const f = forwardXZ();
+      const r = rightXZ();
+      const dir = new THREE.Vector3()
+        .addScaledVector(r, mx)
+        .addScaledVector(f, mz)
+        .normalize();
+      player.pos.addScaledVector(dir, speed * dt);
     }
 
-    // movement (WASD not inverted)
-    if (!invOpen){
-      let mx=0, mz=0;
-      if (keys.has("KeyW")) mz -= 1;
-      if (keys.has("KeyS")) mz += 1;
-      if (keys.has("KeyA")) mx -= 1;
-      if (keys.has("KeyD")) mx += 1;
+    // ground clamp + jump
+    const groundY = heightAt(player.pos.x, player.pos.z) + player.eye;
 
-      const running = keys.has("ShiftLeft") || keys.has("ShiftRight");
-      const speed = running ? player.run : player.walk;
+    // if ground rises, snap up to avoid hovering
+    if (player.pos.y < groundY) player.pos.y = groundY;
 
-      if (mx !== 0 || mz !== 0){
-        const f = forwardXZ();
-        const r = rightXZ();
-        const dir = new THREE.Vector3()
-          .addScaledVector(r, mx)
-          .addScaledVector(f, mz)
-          .normalize();
-        player.pos.addScaledVector(dir, speed * dt);
+    const onGround = Math.abs(player.pos.y - groundY) < 0.02;
+
+    if (onGround){
+      player.velY = 0;
+      player.pos.y = groundY;
+      if (keys.has("Space")){
+        player.velY = player.jump;
+        player.pos.y += 0.02;
       }
-
-      // gravity + ground collision (no flying)
-      const groundY = heightAt(player.pos.x, player.pos.z) + player.eye;
-      const onGround = player.pos.y <= groundY + 0.01;
-
-      if (onGround){
+    } else {
+      player.velY -= player.gravity * dt;
+      player.pos.y += player.velY * dt;
+      if (player.pos.y < groundY){
         player.pos.y = groundY;
         player.velY = 0;
-
-        if (keys.has("Space")){
-          player.velY = player.jump;
-          player.pos.y += 0.02;
-        }
-      } else {
-        player.velY -= player.gravity * dt;
-        player.pos.y += player.velY * dt;
-        if (player.pos.y < groundY){
-          player.pos.y = groundY;
-          player.velY = 0;
-        }
       }
     }
+  }
 
-    // camera transform
+  // ---------------- Viewmodel sway/bob + swing anim ----------------
+  let bob = 0;
+  function updateViewmodel(dt){
+    const moving = (keys.has("KeyW")||keys.has("KeyS")||keys.has("KeyA")||keys.has("KeyD")) && !invOpen;
+    bob += dt * (moving ? 10.0 : 2.0);
+
+    const bobX = Math.sin(bob) * (moving ? 0.010 : 0.002);
+    const bobY = Math.abs(Math.cos(bob)) * (moving ? 0.010 : 0.002);
+
+    // base
+    viewmodel.position.set(0.55 + bobX, -0.45 - bobY, -0.9);
+
+    // swing
+    if (tool.cooldown > 0) {
+      // let cooldown drive swing settle
+    }
+    if (tool.swinging){
+      tool.swingT += dt * 8.0;
+      if (tool.swingT >= 1){
+        tool.swingT = 1;
+        tool.swinging = false;
+      }
+      const t = tool.swingT;
+      const a = t < 0.5 ? (t*2) : (1 - (t-0.5)*2); // triangle
+      rightArm.g.rotation.x = -0.25 + a * 0.85;
+      rightArm.g.rotation.y =  0.25 - a * 0.25;
+      rightArm.g.rotation.z =  0.12 - a * 0.65;
+      leftArm.g.rotation.x  = -0.25 + a * 0.10;
+    } else {
+      rightArm.g.rotation.set(-0.25, 0.25, 0.12);
+      leftArm.g.rotation.set(-0.25, -0.18, -0.05);
+    }
+  }
+
+  // ---------------- Loop ----------------
+  const clock = new THREE.Clock();
+
+  function animate(){
+    requestAnimationFrame(animate);
+    const dt = Math.min(clock.getDelta(), 0.033);
+
+    tool.cooldown = Math.max(0, tool.cooldown - dt);
+
+    updateMovement(dt);
+
+    // camera
     camera.position.copy(player.pos);
     camera.rotation.set(player.pitch, player.yaw, 0, "YXZ");
 
-    // prompt + marker update
+    // viewmodel
+    updateViewmodel(dt);
+
+    // UI prompt + marker
     if (!invOpen) updateTarget();
-    else {
+
+    // prompt text depends on target (clean)
+    if (!invOpen && target){
+      if (target.type === "stonePickup"){
+        promptEl.textContent = "E  PICK UP";
+        promptEl.style.display = "block";
+      } else {
+        promptEl.textContent = "LMB  HARVEST";
+        promptEl.style.display = "block";
+      }
+    } else {
       promptEl.style.display = "none";
-      hitXEl.style.display = "none";
     }
 
-    // update save state periodically
+    // toast
+    if (toastTimer > 0){
+      toastTimer -= dt;
+      if (toastTimer <= 0) toastEl.style.opacity = "0";
+    }
+
+    // save player
     saveState.player.x = player.pos.x;
     saveState.player.y = player.pos.y;
     saveState.player.z = player.pos.z;
@@ -1236,19 +1487,21 @@
 
     renderer.render(scene, camera);
   }
-  tick();
+  animate();
 
   // autosave
   setInterval(writeSave, 2500);
   addEventListener("beforeunload", writeSave);
 
-  // ---------------- Inventory grid init ----------------
+  // ---------------- init inventory/craft UI ----------------
   renderInventory();
+  renderCraft();
 
-  // ---------------- Hide/show HB2 based on craft ----------------
+  // initial hotbar validity
+  setEquip(saveState.equip.slot || 1);
   updateHUD();
 
-  // ---------------- Resize ----------------
+  // resize
   addEventListener("resize", ()=>{
     camera.aspect = innerWidth/innerHeight;
     camera.updateProjectionMatrix();
