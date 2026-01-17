@@ -3,17 +3,25 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>3D Море</title>
-
-  <!-- убирает 404 на favicon.ico -->
+  <title>Равнина + гора + персонаж (Three.js)</title>
   <link rel="icon" href="data:,">
-
   <style>
-    html, body { height: 100%; margin: 0; overflow: hidden; background:#000; }
+    html, body { height:100%; margin:0; overflow:hidden; background:#000; }
     canvas { display:block; }
+    #ui{
+      position:fixed; left:12px; top:12px; z-index:10;
+      font: 13px/1.35 system-ui, -apple-system, Segoe UI, Roboto, Arial;
+      color: rgba(255,255,255,.9);
+      background: rgba(0,0,0,.35);
+      padding: 10px 12px; border-radius: 12px;
+      backdrop-filter: blur(6px);
+      user-select:none;
+      max-width: 360px;
+    }
+    #ui b{ font-weight:650; }
   </style>
 
-  <!-- ВАЖНО: importmap должен быть ДО <script type="module"> -->
+  <!-- Чтобы GitHub Pages понимал import "three" -->
   <script type="importmap">
   {
     "imports": {
@@ -24,114 +32,343 @@
   </script>
 </head>
 <body>
-<script type="module">
-  import * as THREE from "three";
-  import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-  import { Water } from "three/addons/objects/Water.js";
-  import { Sky } from "three/addons/objects/Sky.js";
+  <div id="ui">
+    <b>WASD</b> — ходьба персонажа • <b>Мышь</b> — камера (Orbit)<br>
+    Персонаж: <b>Soldier.glb</b> (пример three.js).<br>
+    Если модель не загрузится — напиши, покажу как положить её в репо локально.
+  </div>
 
-  const renderer = new THREE.WebGLRenderer({ antialias: true });
-  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
-  renderer.setSize(innerWidth, innerHeight);
-  renderer.outputColorSpace = THREE.SRGBColorSpace;
-  renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.05;
-  renderer.physicallyCorrectLights = true;
-  document.body.appendChild(renderer.domElement);
+  <script type="module">
+    import * as THREE from "three";
+    import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+    import { Sky } from "three/addons/objects/Sky.js";
+    import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 
-  const scene = new THREE.Scene();
-  scene.fog = new THREE.FogExp2(0x0b1520, 0.00008);
-
-  const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.1, 20000);
-  camera.position.set(0, 55, 180);
-
-  const controls = new OrbitControls(camera, renderer.domElement);
-  controls.enableDamping = true;
-  controls.maxPolarAngle = Math.PI * 0.49;
-  controls.minDistance = 30;
-  controls.maxDistance = 900;
-
-  // Sky
-  const sky = new Sky();
-  sky.scale.setScalar(10000);
-  scene.add(sky);
-
-  const skyU = sky.material.uniforms;
-  skyU.turbidity.value = 8.0;
-  skyU.rayleigh.value = 2.2;
-  skyU.mieCoefficient.value = 0.006;
-  skyU.mieDirectionalG.value = 0.82;
-
-  const sun = new THREE.Vector3();
-  const pmrem = new THREE.PMREMGenerator(renderer);
-  let envRT = null;
-
-  const sunLight = new THREE.DirectionalLight(0xffffff, 4.2);
-  scene.add(sunLight);
-  scene.add(sunLight.target);
-
-  const hemi = new THREE.HemisphereLight(0xbfe9ff, 0x061018, 0.35);
-  scene.add(hemi);
-
-  function updateSun(elev = 10, azim = 175) {
-    const phi = THREE.MathUtils.degToRad(90 - elev);
-    const theta = THREE.MathUtils.degToRad(azim);
-    sun.setFromSphericalCoords(1, phi, theta);
-
-    skyU.sunPosition.value.copy(sun);
-
-    if (envRT) envRT.dispose();
-    envRT = pmrem.fromScene(sky);
-    scene.environment = envRT.texture;
-
-    sunLight.position.copy(sun).multiplyScalar(2000);
-    sunLight.target.position.set(0, 0, 0);
-    sunLight.target.updateMatrixWorld();
-  }
-
-  // Water normals (лучше хранить локально, но пока можно так)
-  const texLoader = new THREE.TextureLoader();
-  texLoader.setCrossOrigin("anonymous");
-
-  const waterNormals = texLoader.load(
-    "https://threejs.org/examples/textures/waternormals.jpg",
-    (t) => {
-      t.wrapS = t.wrapT = THREE.RepeatWrapping;
-      t.repeat.set(12, 12);
-    }
-  );
-
-  const waterGeo = new THREE.PlaneGeometry(12000, 12000);
-  const water = new Water(waterGeo, {
-    textureWidth: 1024,
-    textureHeight: 1024,
-    waterNormals,
-    sunDirection: new THREE.Vector3(1, 1, 1),
-    sunColor: 0xffffff,
-    waterColor: 0x0a3b55,
-    distortionScale: 4.2,
-    fog: true
-  });
-  water.rotation.x = -Math.PI / 2;
-  scene.add(water);
-
-  updateSun(10, 175);
-
-  const clock = new THREE.Clock();
-  function animate() {
-    requestAnimationFrame(animate);
-    water.material.uniforms.time.value += clock.getDelta() * 0.8;
-    controls.update();
-    renderer.render(scene, camera);
-  }
-  animate();
-
-  addEventListener("resize", () => {
-    camera.aspect = innerWidth / innerHeight;
-    camera.updateProjectionMatrix();
+    // ---------- Renderer ----------
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setSize(innerWidth, innerHeight);
     renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
-  });
-</script>
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.05;
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    document.body.appendChild(renderer.domElement);
+
+    // ---------- Scene / Camera ----------
+    const scene = new THREE.Scene();
+    scene.fog = new THREE.FogExp2(0x0b1520, 0.00055);
+
+    const camera = new THREE.PerspectiveCamera(55, innerWidth / innerHeight, 0.1, 12000);
+    camera.position.set(130, 85, 210);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.target.set(0, 18, 0);
+
+    // ---------- Sky + Environment ----------
+    const sky = new Sky();
+    sky.scale.setScalar(10000);
+    scene.add(sky);
+
+    const skyU = sky.material.uniforms;
+    skyU.turbidity.value = 7.5;
+    skyU.rayleigh.value = 2.0;
+    skyU.mieCoefficient.value = 0.006;
+    skyU.mieDirectionalG.value = 0.82;
+
+    const pmrem = new THREE.PMREMGenerator(renderer);
+    let envRT = null;
+
+    const sun = new THREE.Vector3();
+    function setSun(elevDeg = 12, azimDeg = 155) {
+      const phi = THREE.MathUtils.degToRad(90 - elevDeg);
+      const theta = THREE.MathUtils.degToRad(azimDeg);
+      sun.setFromSphericalCoords(1, phi, theta);
+
+      skyU.sunPosition.value.copy(sun);
+
+      if (envRT) envRT.dispose();
+      envRT = pmrem.fromScene(sky);
+      scene.environment = envRT.texture;
+
+      sunLight.position.copy(sun).multiplyScalar(1600);
+      sunLight.target.position.set(0, 0, 0);
+      sunLight.target.updateMatrixWorld();
+    }
+
+    // ---------- Lights ----------
+    const sunLight = new THREE.DirectionalLight(0xffffff, 4.0);
+    sunLight.castShadow = true;
+    sunLight.shadow.mapSize.set(2048, 2048);
+    sunLight.shadow.bias = -0.00025;
+
+    const s = 260;
+    sunLight.shadow.camera.left = -s;
+    sunLight.shadow.camera.right = s;
+    sunLight.shadow.camera.top = s;
+    sunLight.shadow.camera.bottom = -s;
+    sunLight.shadow.camera.near = 1;
+    sunLight.shadow.camera.far = 3500;
+
+    scene.add(sunLight);
+    scene.add(sunLight.target);
+
+    scene.add(new THREE.HemisphereLight(0xbfe9ff, 0x071018, 0.35));
+
+    setSun(12, 155);
+
+    // ---------- Simple procedural noise (value noise + fbm) ----------
+    function hash2i(ix, iz) {
+      // детерминированный "рандом" 0..1
+      let x = ix * 374761393 + iz * 668265263;
+      x = (x ^ (x >> 13)) * 1274126177;
+      x = (x ^ (x >> 16)) >>> 0;
+      return x / 4294967295;
+    }
+    function fade(t){ return t*t*t*(t*(t*6-15)+10); }
+    function lerp(a,b,t){ return a + (b-a)*t; }
+
+    function noise2D(x, z) {
+      const x0 = Math.floor(x), z0 = Math.floor(z);
+      const x1 = x0 + 1, z1 = z0 + 1;
+
+      const sx = fade(x - x0);
+      const sz = fade(z - z0);
+
+      const n00 = hash2i(x0, z0);
+      const n10 = hash2i(x1, z0);
+      const n01 = hash2i(x0, z1);
+      const n11 = hash2i(x1, z1);
+
+      const ix0 = lerp(n00, n10, sx);
+      const ix1 = lerp(n01, n11, sx);
+      return lerp(ix0, ix1, sz); // 0..1
+    }
+
+    function fbm(x, z, octaves = 5) {
+      let value = 0;
+      let amp = 1;
+      let freq = 1;
+      let sumAmp = 0;
+
+      for (let i = 0; i < octaves; i++) {
+        value += (noise2D(x * freq, z * freq) * 2 - 1) * amp;
+        sumAmp += amp;
+        amp *= 0.5;
+        freq *= 2.0;
+      }
+      return value / sumAmp; // примерно -1..1
+    }
+
+    // ---------- Height function (равнина + гора) ----------
+    function heightAt(x, z) {
+      // равнина (мелкие неровности)
+      const plains = fbm(x * 0.008, z * 0.008, 5) * 7.0;
+
+      // гора (гауссов бугор + чуть "скал")
+      const mx = 0, mz = -80;          // центр горы
+      const dx = x - mx, dz = z - mz;
+      const r2 = dx*dx + dz*dz;
+      const sigma = 140;
+      const mountain = Math.exp(-r2 / (2 * sigma * sigma)) * 95.0;
+
+      const rocky = fbm(x * 0.03, z * 0.03, 4) * 6.0 * (mountain / 95.0);
+
+      return plains + mountain + rocky;
+    }
+
+    // ---------- Ground texture (процедурная "трава") ----------
+    function makeGrassTexture(size = 512) {
+      const c = document.createElement("canvas");
+      c.width = c.height = size;
+      const ctx = c.getContext("2d");
+
+      // base
+      ctx.fillStyle = "#2f6d3a";
+      ctx.fillRect(0, 0, size, size);
+
+      // noise speckles
+      const img = ctx.getImageData(0, 0, size, size);
+      const d = img.data;
+      for (let i = 0; i < d.length; i += 4) {
+        const r = Math.random();
+        const g = 110 + Math.floor(r * 70);
+        const rr = 30 + Math.floor(Math.random() * 30);
+        d[i+0] = rr;
+        d[i+1] = g;
+        d[i+2] = 35 + Math.floor(Math.random() * 25);
+        d[i+3] = 255;
+      }
+      ctx.putImageData(img, 0, 0);
+
+      // subtle lines
+      ctx.globalAlpha = 0.16;
+      ctx.fillStyle = "#1f4d2a";
+      for (let i = 0; i < 1400; i++) {
+        const x = Math.random() * size;
+        const y = Math.random() * size;
+        const w = 20 + Math.random() * 70;
+        const h = 1 + Math.random() * 2;
+        ctx.fillRect(x, y, w, h);
+      }
+      ctx.globalAlpha = 1;
+
+      const tex = new THREE.CanvasTexture(c);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+      tex.repeat.set(18, 18);
+      tex.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
+      return tex;
+    }
+
+    // ---------- Terrain mesh ----------
+    const groundSize = 2000;
+    const seg = 240; // качество
+    const groundGeo = new THREE.PlaneGeometry(groundSize, groundSize, seg, seg);
+
+    // Displace vertices
+    {
+      const pos = groundGeo.attributes.position;
+      for (let i = 0; i < pos.count; i++) {
+        const x = pos.getX(i);
+        const z = pos.getY(i); // пока это "Y" в плоскости, после поворота станет Z
+        const h = heightAt(x, z);
+        pos.setZ(i, h);
+      }
+      groundGeo.computeVertexNormals();
+    }
+
+    const grassMap = makeGrassTexture(512);
+
+    const groundMat = new THREE.MeshStandardMaterial({
+      map: grassMap,
+      roughness: 1.0,
+      metalness: 0.0,
+      color: 0xffffff
+    });
+
+    const ground = new THREE.Mesh(groundGeo, groundMat);
+    ground.rotation.x = -Math.PI / 2;
+    ground.receiveShadow = true;
+    scene.add(ground);
+
+    // ---------- Character (human-like model with textures) ----------
+    const loader = new GLTFLoader();
+    const character = new THREE.Group();
+    scene.add(character);
+
+    let mixer = null;
+    const soldierURL = "https://threejs.org/examples/models/gltf/Soldier.glb";
+
+    loader.load(
+      soldierURL,
+      (gltf) => {
+        const model = gltf.scene;
+        model.traverse((o) => {
+          if (o.isMesh) {
+            o.castShadow = true;
+            o.receiveShadow = true;
+          }
+        });
+
+        model.scale.setScalar(1.4);
+        model.position.set(0, 0, 0);
+        character.add(model);
+
+        // animation
+        mixer = new THREE.AnimationMixer(model);
+        const clip = gltf.animations.find(a => /idle/i.test(a.name)) || gltf.animations[0];
+        if (clip) mixer.clipAction(clip).play();
+      },
+      undefined,
+      (err) => {
+        console.error("Не удалось загрузить Soldier.glb:", err);
+
+        // Fallback: простой "человечек" если GLB не грузится
+        const body = new THREE.Mesh(
+          new THREE.CapsuleGeometry(4.5, 10, 8, 16),
+          new THREE.MeshStandardMaterial({ color: 0xdddddd, roughness: 0.8 })
+        );
+        body.castShadow = true;
+        body.position.y = 12;
+
+        const head = new THREE.Mesh(
+          new THREE.SphereGeometry(4, 24, 16),
+          new THREE.MeshStandardMaterial({ color: 0xffd2b0, roughness: 0.9 })
+        );
+        head.castShadow = true;
+        head.position.y = 20.5;
+
+        character.add(body, head);
+      }
+    );
+
+    // начальная позиция персонажа
+    character.position.set(0, 0, 0);
+    character.position.y = heightAt(character.position.x, character.position.z);
+
+    // ---------- Movement (WASD) ----------
+    const keys = new Set();
+    addEventListener("keydown", (e) => keys.add(e.code));
+    addEventListener("keyup", (e) => keys.delete(e.code));
+
+    const tmpDir = new THREE.Vector3();
+    const qTarget = new THREE.Quaternion();
+    const up = new THREE.Vector3(0, 1, 0);
+
+    function updateCharacter(dt) {
+      const speed = 55; // units/sec
+      let x = 0, z = 0;
+      if (keys.has("KeyW")) z -= 1;
+      if (keys.has("KeyS")) z += 1;
+      if (keys.has("KeyA")) x -= 1;
+      if (keys.has("KeyD")) x += 1;
+
+      if (x !== 0 || z !== 0) {
+        tmpDir.set(x, 0, z).normalize();
+
+        // движение в мировых координатах (можно привязать к камере — скажи, если нужно)
+        character.position.addScaledVector(tmpDir, speed * dt);
+
+        // поворот лицом по направлению движения
+        const yaw = Math.atan2(tmpDir.x, tmpDir.z);
+        qTarget.setFromAxisAngle(up, yaw);
+        character.quaternion.slerp(qTarget, 1 - Math.pow(0.0005, dt)); // сглаживание
+      }
+
+      // "прилипание" к земле
+      character.position.y = heightAt(character.position.x, character.position.z);
+    }
+
+    // ---------- Render loop ----------
+    const clock = new THREE.Clock();
+
+    function animate() {
+      requestAnimationFrame(animate);
+      const dt = Math.min(clock.getDelta(), 0.033);
+
+      if (mixer) mixer.update(dt);
+      updateCharacter(dt);
+
+      // камера чуть следит за персонажем (мягко через target)
+      controls.target.lerp(
+        new THREE.Vector3(character.position.x, character.position.y + 16, character.position.z),
+        1 - Math.pow(0.001, dt)
+      );
+      controls.update();
+
+      renderer.render(scene, camera);
+    }
+    animate();
+
+    // ---------- Resize ----------
+    addEventListener("resize", () => {
+      camera.aspect = innerWidth / innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(innerWidth, innerHeight);
+      renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    });
+  </script>
 </body>
 </html>
